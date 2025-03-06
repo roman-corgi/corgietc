@@ -20,7 +20,7 @@ setuptools.setup(
     version=version_string,
     author="Roman CPP",
     author_email="ds264@cornell.edu",
-    description="Roman Observatory pointing calculation",
+    description="Roman Observatory Coronagraph Instrument Exposure Time Calculator",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/roman-corgi/corgietc",
