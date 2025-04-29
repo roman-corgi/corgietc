@@ -20,7 +20,7 @@ After successfully executing the setup notebook, navigate to any of the Demo not
 https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/01_Demo_47UMa_CRD_Values.ipynb
 
 
-## Method 2: Local Installation
+### Method 2: Local Installation
 
 If you wish to run the ETC on your own computer, you must first install all required packages and download all relevant data.  
 
@@ -54,4 +54,15 @@ We **strongly** recommend use of a dedicated Python virtual environment.  The in
 
 >**Warning**
 >There appears to be an issue (at least on macOS) where if you already have jupyter-lab installed in a system path, it will be executed initially instead of the one you install in your virtual environment.  A simple fix is to deactivate and re-activate the virtual environment after you run the initial pip installation (i.e., between steps 4 and 5).
+
+### Updating corgietc
+
+If using `corgietc` via Google Colab, updates occur automatically - no user action is required. Each time you run one of the notebooks, you will automatically be using the latest code version.  Occassionally, Google Colab may hold on to a stale notebook version.  You can fix this by deleting the current runtime (in the `Runtime` menu) and clearing your browser cache. 
+
+For local installations, run `git pull` in the repository directory, and then upgrade the installed version in your virtual environment by executing 
+
+```pip install --upgrad .```
+
+from the repository top level.
+
 
