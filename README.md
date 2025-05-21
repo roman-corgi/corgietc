@@ -61,7 +61,7 @@ If using `corgietc` via Google Colab, updates occur automatically - no user acti
 
 For local installations, run `git pull` in the repository directory, and then upgrade the installed version in your virtual environment by executing 
 
-```pip install --upgrad .```
+```pip install --upgrade .```
 
 from the repository top level.
 
