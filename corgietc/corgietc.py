@@ -9,8 +9,10 @@ import pandas as pd
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 
 
-class CGI_Noise(Nemati):
+class corgietc(Nemati):
 
     def __init__(self, **specs):
         # call upstream init
         Nemati.__init__(self, **specs)
+
+
