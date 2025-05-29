@@ -1,0 +1,3 @@
+[submodule "corgietc/CGI_Noise"]
+	path = corgietc/CGI_Noise
+	url = git@github.com:roman-corgi/CGI_Noise.git
