@@ -18,6 +18,8 @@ class corgietc(Nemati):
 
         if "PSFpeak" not in self.allowed_starlightSuppressionSystem_kws:
             self.allowed_starlightSuppressionSystem_kws.append("PSFpeak")
+        for param_name in ["AvgRawContrast", "ExtContStab", "IntContStab", "SystematicC", "InitStatContrast"]:
+            self.allowed_starlightSuppressionSystem_kws.append(param_name)
 
         for nsyst, syst in enumerate(self.starlightSuppressionSystems):
             syst = self.get_coro_param(
@@ -31,7 +33,19 @@ class corgietc(Nemati):
             dat = syst["PSFpeak"]
             self._outspec["starlightSuppressionSystems"][nsyst]["PSFpeak"] = (
                 dat.value if isinstance(dat, u.Quantity) else dat
-            )
+            ) 
+
+            for param_name in ["AvgRawContrast", "ExtContStab", "IntContStab", "SystematicC", "InitStatContrast"]:
+                value = self.get_coro_param(
+                    syst,
+                    param_name,
+                    expected_ndim=1,
+                    min_val=0.0,
+                    interp_kind="nearest",
+                )
+                self._outspec["starlightSuppressionSystems"][nsyst][param_name] = (
+                    value.value if isinstance(value, u.Quantity) else value
+                )
 
         
     # def populate_observingModes_extra(self):
