@@ -39,9 +39,11 @@ class corgietc(Nemati):
                 value = self.get_coro_param(
                     syst,
                     param_name,
-                    expected_ndim=1,
+                    expected_ndim=2,
+                    expected_first_dim=2,
                     min_val=0.0,
                     interp_kind="nearest",
+                    update_WAs = False
                 )
                 self._outspec["starlightSuppressionSystems"][nsyst][param_name] = (
                     value.value if isinstance(value, u.Quantity) else value
