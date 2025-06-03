@@ -14,7 +14,14 @@
     "scienceInstruments": [
         {
             "name": "NF_B1_Imager",
-            "CritLam": 500
+            "CritLam": 500,
+            "compbeamD": 0.005,
+            "fnlFocLen": 0.26,
+            "PSF_x_lamD": 0.942, 
+            "PSF_y_lamD": 0.45, 
+            "Rlamsq": 0.0008549637206953,  
+            "Rlam": -1.5131362317830300, 
+            "Rconst": 707.8977209483250000
         }
     ],
     "starlightSuppressionSystems": [

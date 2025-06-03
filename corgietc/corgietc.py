@@ -16,12 +16,26 @@ class corgietc(Nemati):
     def __init__(
         self,
         CritLam=500,
+        compbeamD=0.005,
+        fnlFocLen=0.26,
+        PSF_x_lamD=0.942, 
+        PSF_y_lamD=0.45, 
+        Rlamsq=0.0008549637206953,  
+        Rlam=-1.5131362317830300, 
+        Rconst=707.8977209483250000,
         **specs,
     ):
 
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
             "CritLam": CritLam,
+            "compbeamD": compbeamD,
+            "fnlFocLen": fnlFocLen,
+            "PSF_x_lamD": PSF_x_lamD, 
+            "PSF_y_lamD": PSF_y_lamD, 
+            "Rlamsq": Rlamsq,  
+            "Rlam": Rlam, 
+            "Rconst": Rconst
         }
 
         Nemati.__init__(self, **specs)
@@ -91,6 +105,14 @@ class corgietc(Nemati):
         # specify dictionary of keys and units
         kws = {
             "CritLam": u.nm,  # ciritcal wavelength
+            "compbeamD": u.m, # compressd beam_diameter
+            "fnlFocLen": u.m, # final focal length
+            "PSF_x_lamD": None, # PSF core x extent 
+            "PSF_y_lamD": None, #PSF core y extent
+            "Rlamsq": None,  #lam_squared
+            "Rlam": None, #lam
+            "Rconst": None #constant
+            
         }
         self.allowed_scienceInstrument_kws += list(kws.keys())
 
