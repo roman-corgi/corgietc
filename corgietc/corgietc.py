@@ -18,10 +18,10 @@ class corgietc(Nemati):
         CritLam=500,
         compbeamD=0.005,
         fnlFocLen=0.26,
-        PSF_x_lamD=0.942,
-        PSF_y_lamD=0.45,
-        Rlamsq=0.0008549637206953,
-        Rlam=-1.51313623178303,
+        PSF_x_lamD=0.942, 
+        PSF_y_lamD=0.45, 
+        Rlamsq=0.0008549637206953,  
+        Rlam=-1.5131362317830300, 
         Rconst=707.8977209483250000,
         **specs,
     ):
@@ -31,11 +31,11 @@ class corgietc(Nemati):
             "CritLam": CritLam,
             "compbeamD": compbeamD,
             "fnlFocLen": fnlFocLen,
-            "PSF_x_lamD": PSF_x_lamD,
-            "PSF_y_lamD": PSF_y_lamD,
-            "Rlamsq": Rlamsq,
-            "Rlam": Rlam,
-            "Rconst": Rconst,
+            "PSF_x_lamD": PSF_x_lamD, 
+            "PSF_y_lamD": PSF_y_lamD, 
+            "Rlamsq": Rlamsq,  
+            "Rlam": Rlam, 
+            "Rconst": Rconst
         }
 
         Nemati.__init__(self, **specs)
