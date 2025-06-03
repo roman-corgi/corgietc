@@ -15,6 +15,17 @@
         {
             "name": "NF_B1_Imager",
             "CritLam": 500,
+            "pixelSize": 1.3e-05
+        },
+        {
+            "name": "WF_B4_Imager",
+            "CritLam": 500,
+            "pixelSize": 1.3e-05
+        },
+        {
+            "name": "WF_B3_Spec",
+            "CritLam": 500,
+            "pixelSize": 1.3e-05,
             "compbeamD": 0.005,
             "fnlFocLen": 0.26,
             "PSF_x_lamD": 0.942, 
