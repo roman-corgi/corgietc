@@ -9,6 +9,7 @@ from pathlib import Path
 
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 from cgi_noise import cginoiselib as fl
+from EXOSIMS.util._numpy_compat import copy_if_needed
 
 
 class corgietc(Nemati):
@@ -42,6 +43,9 @@ class corgietc(Nemati):
         # add local defaults to outspec
         for k in self.default_vals_extra2:
             self._outspec[k] = self.default_vals_extra2[k]
+
+        # useful conversion factor
+        self.radas = ((1 * u.arcsec).to(u.rad)).value
 
     def populate_starlightSuppressionSystems_extra(self):
 
@@ -129,6 +133,7 @@ class corgietc(Nemati):
         """Add specific observing mode keywords"""
 
         self.allowed_observingMode_kws.append("Scenario")
+        self.allowed_observingMode_kws.append("strayLight")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -156,7 +161,6 @@ class corgietc(Nemati):
                 dpix_dlam = ResPowatPSF * xpixPerCor / mode["lam"]
                 xpixPerSpec = dpix_dlam * mode["lam"] / mode["inst"]["Rs"]
                 mode["mpix"] = xpixPerSpec * ypixPerCor
-
             else:
                 raise Exception("Instrument name must contain IMAGER or SPEC")
 
@@ -166,23 +170,26 @@ class corgietc(Nemati):
         syst = mode["syst"]
         lam = mode["lam"]
 
-        radas = ((1 * u.arcsec).to(u.rad)).value
-
         omegaPSF = (
             (syst["core_area"](lam, WA) / syst["input_angle_unit_value"] ** 2)
             .decompose()
             .value
         )
         CGintmpix = (
-            omegaPSF * radas**2
-            / ((syst["CGintSamp"] * syst["lam"] / self.pupilDiam) ** 2)
-        ).decompose().value
+            (
+                omegaPSF
+                * self.radas**2
+                / ((syst["CGintSamp"] * syst["lam"] / self.pupilDiam) ** 2)
+            )
+            .decompose()
+            .value
+        )
 
         PSFpeakI = syst["PSFpeak"](lam, WA)[0]
         if "IMG_NFB1_HLC" in mode["Scenario"]:
             PSFpeakI /= CGintmpix
 
-        CG_PSFarea_sqlamD = omegaPSF / (syst["lam"].to_value(u.m) / radas)**2
+        CG_PSFarea_sqlamD = omegaPSF / (syst["lam"].to_value(u.m) / self.radas) ** 2
 
         out = fl.CGParameters(
             CGcoreThruput=syst["core_thruput"](lam, WA)[0],
@@ -245,3 +252,25 @@ class corgietc(Nemati):
         # Star fluxes (ph/m^2/s)
         flux_star = TL.starFlux(sInds, mode)
 
+        # get mode elements
+        syst = mode["syst"]
+        inst = mode["inst"]
+        lam = mode["lam"]
+
+        # loop through all values
+        for jj, ss in enumerate(sInds):
+            if WA.size == 1:
+                cg = self.construct_cg(mode, WA)
+            else:
+                cg = self.construct_cg(mode, WA[jj])
+
+            f_SR, detPixSize_m = mode["f_SR"], inst["pixelSize"].to_value(u.m)
+            if "mpix" in mode:
+                mpix = mode["mpix"]
+            else:
+                mpix = (
+                    cg.omegaPSF
+                    * self.radas**2
+                    * (lam.to_value(u.m) / cg.CGdesignWL) ** 2
+                    * (2 * self.pupilDiam / inst["CritLam"]).decompose().value ** 2
+                )

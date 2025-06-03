@@ -4,6 +4,8 @@
             "completeness_filter": {"enabled": false},
             "binary_filter": {"enabled": false}
     },
+    "VmagFill":5,
+    "distFill":10,
     "minComp": 0,
     "pupilDiam": 2.363,
     "obscurFac": 0, 
@@ -87,7 +89,24 @@
             "systName": "OPT_B1_HLC",
             "Scenario": "OPT_IMG_NFB1_HLC",
             "lam": 575,
-            "SNR": 5
+            "SNR": 5,
+            "strayLight": 8.1
         }
-    ]
+    ],
+ "modules": {
+   "PlanetPopulation": " ",
+   "StarCatalog": " ",
+   "OpticalSystem": " ",
+   "ZodiacalLight": "Stark",
+   "BackgroundSources": "GalaxiesFaintStars",
+   "PlanetPhysicalModel": "ForecasterMod",
+   "Observatory": " ",
+   "TimeKeeping": " ",
+   "PostProcessing": " ",
+   "Completeness": " ",
+   "TargetList": " ",
+   "SimulatedUniverse": " ",
+   "SurveySimulation": " ",
+   "SurveyEnsemble": " "
+ }
 }
