@@ -65,11 +65,6 @@ class corgietc(Nemati):
                 min_val=0.0,
             )
 
-            dat = syst["PSFpeak"]
-            self._outspec["starlightSuppressionSystems"][nsyst]["PSFpeak"] = (
-                dat.value if isinstance(dat, u.Quantity) else dat
-            )
-
             for param_name in [
                 "AvgRawContrast",
                 "ExtContStab",
@@ -77,7 +72,7 @@ class corgietc(Nemati):
                 "SystematicC",
                 "InitStatContrast",
             ]:
-                value = self.get_coro_param(
+                syst = self.get_coro_param(
                     syst,
                     param_name,
                     expected_ndim=2,
@@ -86,9 +81,6 @@ class corgietc(Nemati):
                     interp_kind="nearest",
                     update_WAs=False,
                     fill="extrapolate",
-                )
-                self._outspec["starlightSuppressionSystems"][nsyst][param_name] = (
-                    value.value if isinstance(value, u.Quantity) else value
                 )
 
     def populate_scienceInstruments_extra(self):
@@ -112,32 +104,41 @@ class corgietc(Nemati):
             # load all additional detector specifications
             for kw in kws:
                 inst[kw] = float(inst.get(kw, self.default_vals_extra2[kw]))
+                self._outspec["scienceInstruments"][ninst][kw] = inst[kw]
                 if kws[kw] is not None:
                     inst[kw] *= kws[kw]
 
-                if "imager" in inst["name"].lower():
-                    inst["f_SR"] = 1
-                elif "spec" in inst["name"].lower():
-                    inst["fnumber"] = (
-                        (inst["fnlFocLen"] / inst["compbeamD"]).decompose().value
-                    )
-                else:
-                    raise Exception("Instrument name must contain IMAGER or SPEC")
-
-                inst["pixelScale"] = (inst["CritLam"] / self.pupilDiam / 2).to(
-                    u.arcsec, equivalencies=u.dimensionless_angles()
+            if "imager" in inst["name"].lower():
+                pass
+            elif "spec" in inst["name"].lower():
+                inst["fnumber"] = (
+                    (inst["fnlFocLen"] / inst["compbeamD"]).decompose().value
                 )
+            else:
+                raise Exception("Instrument name must contain IMAGER or SPEC")
 
-    # def populate_observingModes_extra(self):
-    #     """Add Nemati_2019-specific observing mode keywords"""
+            inst["pixelScale"] = (inst["CritLam"] / self.pupilDiam / 2).to(
+                u.arcsec, equivalencies=u.dimensionless_angles()
+            )
 
-    #     super().populate_observingModes_extra()
-    #     self.allowed_observingMode_kws.append("Scenario")
+    def populate_observingModes_extra(self):
+        """Add specific observing mode keywords"""
 
-    #     for nmode, mode in enumerate(self.observingModes):
-    #         mode["Scenario"] = mode.get(
-    #             "Scenario", self.default_vals_extra2["Scenario"]
-    #         )
-    #         self._outspec["observingModes"][nmode]["Scenario"] = mode[
-    #             "Scenario"
-    #         ]
+        self.allowed_observingMode_kws.append("Scenario")
+
+        for nmode, mode in enumerate(self.observingModes):
+            assert "Scenario" in mode and isinstance(
+                mode["Scenario"], str
+            ), "All observing modes must have key 'Scenario'."
+
+            if "imager" in mode["instName"].lower():
+                mode["f_SR"] = 1
+            elif "spec" in mode["instName"].lower():
+                mode["f_SR"] = 1 / (mode["inst"]["Rs"] * mode["BW"])
+                mode["pixPerlamD"] = (
+                    (mode["lam"] * mode["inst"]["fnumber"] / mode["inst"]["pixelSize"])
+                    .decompose()
+                    .value
+                )
+            else:
+                raise Exception("Instrument name must contain IMAGER or SPEC")
