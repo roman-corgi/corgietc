@@ -37,6 +37,7 @@ class corgietc(Nemati):
             "Rconst": Rconst,
         }
 
+
         Nemati.__init__(self, **specs)
 
         # add local defaults to outspec
@@ -125,6 +126,7 @@ class corgietc(Nemati):
         """Add specific observing mode keywords"""
 
         self.allowed_observingMode_kws.append("Scenario")
+        self.allowed_observingMode_kws.append("strayLight")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
