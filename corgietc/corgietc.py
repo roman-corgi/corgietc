@@ -135,10 +135,23 @@ class corgietc(Nemati):
                 mode["f_SR"] = 1
             elif "spec" in mode["instName"].lower():
                 mode["f_SR"] = 1 / (mode["inst"]["Rs"] * mode["BW"])
-                mode["pixPerlamD"] = (
+
+                # compute mpix:
+                pixPerlamD = (
                     (mode["lam"] * mode["inst"]["fnumber"] / mode["inst"]["pixelSize"])
                     .decompose()
                     .value
                 )
+                xpixPerCor = mode["inst"]["PSF_x_lamD"] * 2 * pixPerlamD
+                ypixPerCor = mode["inst"]["PSF_y_lamD"] * 2 * pixPerlamD
+                ResPowatPSF = (
+                    mode["inst"]["Rconst"]
+                    + mode["inst"]["Rlam"] * mode["lam"]
+                    + mode["inst"]["Rlamsq"] * mode["lam"] ** 2
+                )
+                dpix_dlam = ResPowatPSF * xpixPerCor / mode["lam"]
+                xpixPerSpec = dpix_dlam * mode["lam"] / mode["inst"]["Rs"]
+                mode["mpix"] = xpixPerSpec * ypixPerCor
+
             else:
                 raise Exception("Instrument name must contain IMAGER or SPEC")
