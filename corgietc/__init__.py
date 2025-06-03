@@ -10,4 +10,4 @@ assert datapath.exists(), (
     "Could not identify corgietc datapath. Check that the "
     "corgietc installation was fully successful."
 )
-os.environ["CGI_PERF_DIR"] = str(datapath)
+os.environ["CORGIETC_DATA_DIR"] = str(datapath)

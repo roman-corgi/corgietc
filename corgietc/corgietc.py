@@ -7,6 +7,7 @@ from scipy import interpolate
 import pandas as pd
 
 from EXOSIMS.OpticalSystem.Nemati import Nemati
+from cgi_noise import cginoiselib as fl
 
 
 class corgietc(Nemati):
