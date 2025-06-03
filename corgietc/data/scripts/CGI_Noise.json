@@ -32,7 +32,8 @@
             "PSF_y_lamD": 0.45, 
             "Rlamsq": 0.0008549637206953,  
             "Rlam": -1.5131362317830300, 
-            "Rconst": 707.8977209483250000
+            "Rconst": 707.8977209483250000,
+            "Rs": 50
         }
     ],
     "starlightSuppressionSystems": [
@@ -77,6 +78,15 @@
             "IntContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
             "SystematicC": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
             "InitStatContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv"
+        }
+    ],
+    "observingModes":[
+        {
+            "instName": "NF_B1_Imager",
+            "systName": "OPT_B1_HLC",
+            "Scenario": "OPT_IMG_NFB1_HLC",
+            "lam": 575,
+            "SNR": 5
         }
     ]
 }
