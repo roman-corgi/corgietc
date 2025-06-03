@@ -9,7 +9,6 @@ from pathlib import Path
 
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 from cgi_noise import cginoiselib as fl
-from cgi_noise.loadCSVrow import loadCSVrow
 
 
 class corgietc(Nemati):
@@ -18,10 +17,10 @@ class corgietc(Nemati):
         CritLam=500,
         compbeamD=0.005,
         fnlFocLen=0.26,
-        PSF_x_lamD=0.942, 
-        PSF_y_lamD=0.45, 
-        Rlamsq=0.0008549637206953,  
-        Rlam=-1.5131362317830300, 
+        PSF_x_lamD=0.942,
+        PSF_y_lamD=0.45,
+        Rlamsq=0.0008549637206953,
+        Rlam=-1.5131362317830300,
         Rconst=707.8977209483250000,
         **specs,
     ):
@@ -31,21 +30,14 @@ class corgietc(Nemati):
             "CritLam": CritLam,
             "compbeamD": compbeamD,
             "fnlFocLen": fnlFocLen,
-            "PSF_x_lamD": PSF_x_lamD, 
-            "PSF_y_lamD": PSF_y_lamD, 
-            "Rlamsq": Rlamsq,  
-            "Rlam": Rlam, 
-            "Rconst": Rconst
+            "PSF_x_lamD": PSF_x_lamD,
+            "PSF_y_lamD": PSF_y_lamD,
+            "Rlamsq": Rlamsq,
+            "Rlam": Rlam,
+            "Rconst": Rconst,
         }
 
         Nemati.__init__(self, **specs)
-        data_dir = Path(os.environ["CGI_NOISE_DATA_DIR"])
-        self.FocalPlaneAtt = loadCSVrow(
-            data_dir / "instrument" / "CONST_SNR_FPattributes.csv"
-        )
-        self.AmiciPar = loadCSVrow(
-            data_dir / "instrument" / "CONST_Amici_parameters.csv"
-        )
 
         # add local defaults to outspec
         for k in self.default_vals_extra2:
@@ -125,13 +117,16 @@ class corgietc(Nemati):
 
                 if "imager" in inst["name"].lower():
                     inst["f_SR"] = 1
-                    inst["pixelScale"] = (inst["CritLam"] / self.pupilDiam / 2).to(
-                        u.arcsec, equivalencies=u.dimensionless_angles()
-                    )
                 elif "spec" in inst["name"].lower():
-
+                    inst["fnumber"] = (
+                        (inst["fnlFocLen"] / inst["compbeamD"]).decompose().value
+                    )
                 else:
                     raise Exception("Instrument name must contain IMAGER or SPEC")
+
+                inst["pixelScale"] = (inst["CritLam"] / self.pupilDiam / 2).to(
+                    u.arcsec, equivalencies=u.dimensionless_angles()
+                )
 
     # def populate_observingModes_extra(self):
     #     """Add Nemati_2019-specific observing mode keywords"""
