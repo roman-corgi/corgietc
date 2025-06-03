@@ -13,8 +13,8 @@
     "explainFiltering":true,
     "scienceInstruments": [
         {
-            "name": "NF_B1_Imager"
-
+            "name": "NF_B1_Imager",
+            "CritLam": 500
         }
     ],
     "starlightSuppressionSystems": [

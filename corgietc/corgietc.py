@@ -5,20 +5,39 @@ import astropy.units as u
 import numpy as np
 from scipy import interpolate
 import pandas as pd
+from pathlib import Path
 
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 from cgi_noise import cginoiselib as fl
+from cgi_noise.loadCSVrow import loadCSVrow
 
 
 class corgietc(Nemati):
     def __init__(
         self,
+        CritLam=500,
         **specs,
     ):
+
+        # package inputs for use in popoulate*_extra
+        self.default_vals_extra2 = {
+            "CritLam": CritLam,
+        }
+
         Nemati.__init__(self, **specs)
+        data_dir = Path(os.environ["CGI_NOISE_DATA_DIR"])
+        self.FocalPlaneAtt = loadCSVrow(
+            data_dir / "instrument" / "CONST_SNR_FPattributes.csv"
+        )
+        self.AmiciPar = loadCSVrow(
+            data_dir / "instrument" / "CONST_Amici_parameters.csv"
+        )
+
+        # add local defaults to outspec
+        for k in self.default_vals_extra2:
+            self._outspec[k] = self.default_vals_extra2[k]
 
     def populate_starlightSuppressionSystems_extra(self):
-        super().populate_starlightSuppressionSystems_extra()
 
         if "PSFpeak" not in self.allowed_starlightSuppressionSystem_kws:
             self.allowed_starlightSuppressionSystem_kws.append("PSFpeak")
@@ -65,6 +84,23 @@ class corgietc(Nemati):
                 self._outspec["starlightSuppressionSystems"][nsyst][param_name] = (
                     value.value if isinstance(value, u.Quantity) else value
                 )
+
+    def populate_scienceInstruments_extra(self):
+        """Additional setup for science instruments."""
+
+        # specify dictionary of keys and units
+        kws = {
+            "CritLam": u.nm,  # ciritcal wavelength
+        }
+        self.allowed_scienceInstrument_kws += list(kws.keys())
+
+        for ninst, inst in enumerate(self.scienceInstruments):
+
+            # load all additional detector specifications
+            for kw in kws:
+                inst[kw] = float(inst.get(kw, self.default_vals_extra2[kw]))
+                if kws[kw] is not None:
+                    inst[kw] *= kws[kw]
 
     # def populate_observingModes_extra(self):
     #     """Add Nemati_2019-specific observing mode keywords"""
