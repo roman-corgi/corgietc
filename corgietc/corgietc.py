@@ -16,12 +16,26 @@ class corgietc(Nemati):
     def __init__(
         self,
         CritLam=500,
+        compbeamD=0.005,
+        fnlFocLen=0.26,
+        PSF_x_lamD=0.942,
+        PSF_y_lamD=0.45,
+        Rlamsq=0.0008549637206953,
+        Rlam=-1.51313623178303,
+        Rconst=707.8977209483250000,
         **specs,
     ):
 
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
             "CritLam": CritLam,
+            "compbeamD": compbeamD,
+            "fnlFocLen": fnlFocLen,
+            "PSF_x_lamD": PSF_x_lamD,
+            "PSF_y_lamD": PSF_y_lamD,
+            "Rlamsq": Rlamsq,
+            "Rlam": Rlam,
+            "Rconst": Rconst,
         }
 
         Nemati.__init__(self, **specs)
@@ -91,6 +105,13 @@ class corgietc(Nemati):
         # specify dictionary of keys and units
         kws = {
             "CritLam": u.nm,  # ciritcal wavelength
+            "compbeamD": u.m,  # compressed beam diameter
+            "fnlFocLen": u.m,  # final focal length
+            "PSF_x_lamD": None,  # PSF x extent in lambda/D
+            "PSF_y_lamD": None,  # PSF y extent in lambda/D
+            "Rlamsq": None,
+            "Rlam": None,
+            "Rconst": None,
         }
         self.allowed_scienceInstrument_kws += list(kws.keys())
 
@@ -101,6 +122,16 @@ class corgietc(Nemati):
                 inst[kw] = float(inst.get(kw, self.default_vals_extra2[kw]))
                 if kws[kw] is not None:
                     inst[kw] *= kws[kw]
+
+                if "imager" in inst["name"].lower():
+                    inst["f_SR"] = 1
+                    inst["pixelScale"] = (inst["CritLam"] / self.pupilDiam / 2).to(
+                        u.arcsec, equivalencies=u.dimensionless_angles()
+                    )
+                elif "spec" in inst["name"].lower():
+
+                else:
+                    raise Exception("Instrument name must contain IMAGER or SPEC")
 
     # def populate_observingModes_extra(self):
     #     """Add Nemati_2019-specific observing mode keywords"""
