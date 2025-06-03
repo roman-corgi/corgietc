@@ -86,7 +86,8 @@
             "systName": "OPT_B1_HLC",
             "Scenario": "OPT_IMG_NFB1_HLC",
             "lam": 575,
-            "SNR": 5
+            "SNR": 5,
+            "strayLight": 8.1
         }
     ]
 }
