@@ -24,23 +24,27 @@ https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/No
 
 If you wish to run the ETC on your own computer, you must first install all required packages and download all relevant data.  
 
-We **strongly** recommend use of a dedicated Python virtual environment.  The instructions below assume that you have Python (version 3.10 or higher) and pip installed and working on your machine. For help with that, start here: https://wiki.python.org/moin/BeginnersGuide/. We'll assume that Python and pip are executable as `python` and `pip`, respectively, but they might be called `python3` and `pip3` (or something else) on your particular system. These instructions are based on working in a terminal (macOS/Linux) or command prompt/PowerShell (Windows).
+We **strongly** recommend use of a dedicated Python virtual environment.  The instructions below assume that you have Python (version 3.10 or higher) and pip installed and working on your machine. For help with that, start here: https://wiki.python.org/moin/BeginnersGuide/. We'll assume that Python and pip are executable as `python` and `pip`, respectively, but they might be called `python3` and `pip3` (or something else) on your particular system. These instructions are based on working in a terminal (macOS/Linux) or command prompt/PowerShell (Windows). You also need to have git installed (https://github.com/git-guides/install-git) and executable as `git`. 
 
-1. Download or clone the corgietc repository (https://github.com/roman-corgi/corgietc) and the cgi_noise repository (https://github.com/roman-corgi/cgi_noise) to your computer (see here for help on this: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository).
+1. Clone the corgietc repository (https://github.com/roman-corgi/corgietc) and the cgi_noise repository (https://github.com/roman-corgi/cgi_noise) to your computer (see here for help on this: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository).
 
 2. Create a python virtual environment (we'll call ours `corgietc` but you can replace this with any name you like). In a terminal/command prompt/powershell/etc, navigate to a directory where you want to create the virtual environment and run:
    
    ```python -m venv corgietc```
    
-3. Activate the environment. On macOS/Linux (see https://docs.python.org/3/library/venv.html for Windows details):
+3. Activate the environment. On macOS/Linux:
 
     ```source corgietc/bin/activate```
 
-4. In the same terminal with the active virtual environment, navigate to the cloned/downloaded `cgi_noise` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
+   For Windows, see https://docs.python.org/3/library/venv.html
+
+5. In the same terminal with the active virtual environment, navigate to the cloned/downloaded `cgi_noise` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
 
     ```pip install .```
 
-5. Once `cgi_noise` successfully installs, navigate to the cloned/downlaoded `corgietc` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
+   Do not omit the period at the end - it is important. 
+
+7. Once `cgi_noise` successfully installs, navigate to the cloned/downlaoded `corgietc` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
 
     ```
     git checkout cgi_noise2
@@ -49,16 +53,16 @@ We **strongly** recommend use of a dedicated Python virtual environment.  The in
     
     This will install all of the python packages required by the demo notebooks.
  
-6. You will also need a Jypyter environment to execute the notebooks.  We recommend jupyter-lab, which can be installed by running (from any directory):
+8. You will also need a Jypyter environment to execute the notebooks.  We recommend jupyter-lab, which can be installed by running (from any directory):
 
     ```pip install jupyter-lab```
 
 
-7. Navigate to the `Notebooks` subdirectory of the repository (this should just be `cd Notebooks` from where you were last) and then start JupyterLab by running `jupyter-lab`
+9. Navigate to the `Notebooks` subdirectory of the repository (this should just be `cd Notebooks` from where you were last) and then start JupyterLab by running `jupyter-lab`
 
-8. Skip the code blocks of any notebook that are marked as for Collab execution only.
+10. Skip the code blocks of any notebook that are marked as for Collab execution only.
 
-9. To stop JupyterLab, type `ctrl+c` in the terminal where it is running and then hit `ctrl+c` again (or type `y` at the prompt). To deactivate the virtual environment just type `deactivate` at the prompt.  Next time you want to run the tutorials again, you just activate the environment again, navigate to the Notebooks directory and run `jupyter-lab`
+11. To stop JupyterLab, type `ctrl+c` in the terminal where it is running and then hit `ctrl+c` again (or type `y` at the prompt). To deactivate the virtual environment just type `deactivate` at the prompt.  Next time you want to run the tutorials again, you just activate the environment again, navigate to the Notebooks directory and run `jupyter-lab`
 
 >**Warning**
 >There appears to be an issue (at least on macOS) where if you already have jupyter-lab installed in a system path, it will be executed initially instead of the one you install in your virtual environment.  A simple fix is to deactivate and re-activate the virtual environment after you run the initial pip installation (i.e., between steps 6 and 7).  Environments can be deactivated by running `deactivate` in the terminal where the environment is active, and then re-activated by sourcing the same file as in step 3. 
