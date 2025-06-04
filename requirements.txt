@@ -1,1 +1,1 @@
-EXOSIMS>=3.4.1
+EXOSIMS==3.4.1
