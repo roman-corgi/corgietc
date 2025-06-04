@@ -15,9 +15,9 @@ Ensure that you are logged in with the Google account you wish to use (data will
 
 Execute all of the cells in the notebook, responding to any pop-up prompts along the way (see the notebook for more detailed instructions). Note that you only need to run this notebook **once** (even if you log out/close the browser instance, the files written to your Google Drive will be persistent).
 
-After successfully executing the setup notebook, navigate to any of the Demo notebooks, either by opening them directly in Colab (see instructions at the end of the setup notebook) or by pre-pending `https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/` to the name of any of the notebooks.  So, for example, you can directly access the first demo by navigating to:
+After successfully executing the setup notebook, navigate to any of the other notebooks, either by opening them directly in Colab (see instructions at the end of the setup notebook) or by pre-pending `https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/` to the name of any of the notebooks.  So, for example, you can directly access the first notebook by navigating to:
 
-https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/01_Demo_47UMa_CRD_Values.ipynb
+https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/01_Anatomy_of_an_Integration_Time_Calculation.ipynb 02_Getting_to_Know_Your_Observing_Mode.ipynb
 
 
 ### Method 2: Local Installation
