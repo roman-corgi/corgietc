@@ -4,6 +4,7 @@
             "completeness_filter": {"enabled": false},
             "binary_filter": {"enabled": false}
     },
+    "filterBinaries": false,
     "VmagFill":5,
     "distFill":10,
     "minComp": 0,
