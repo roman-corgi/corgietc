@@ -237,14 +237,15 @@ class corgietc(Nemati):
             .value
         )
 
-        PSFpeakI = syst["PSFpeak"](lam, WA)[0]
+        WAl = np.repeat(WA, 1)
+        PSFpeakI = syst["PSFpeak"](lam, WAl)[0]
         if "IMG_NFB1_HLC" in mode["Scenario"]:
             PSFpeakI /= CGintmpix
 
         CG_PSFarea_sqlamD = omegaPSF / (syst["lam"].to_value(u.m) / self.radas) ** 2
 
         out = fl.CGParameters(
-            CGcoreThruput=syst["core_thruput"](lam, WA)[0],
+            CGcoreThruput=syst["core_thruput"](lam, WAl)[0],
             PSFpeakI=PSFpeakI,
             omegaPSF=omegaPSF,
             CGintSamp=syst["CGintSamp"],
@@ -252,9 +253,9 @@ class corgietc(Nemati):
             CGdesignWL=lam.to_value(u.m),
             CGintmpix=CGintmpix,
             CG_PSFarea_sqlamD=CG_PSFarea_sqlamD,
-            CGintensity=syst["core_mean_intensity"](lam, WA)[0],
-            CG_occulter_transmission=syst["occ_trans"](lam, WA),
-            CGcontrast=syst["core_contrast"](lam, WA),
+            CGintensity=syst["core_mean_intensity"](lam, WAl)[0],
+            CG_occulter_transmission=syst["occ_trans"](lam, WAl)[0],
+            CGcontrast=syst["core_contrast"](lam, WAl)[0],
         )
 
         return out
