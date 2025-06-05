@@ -90,16 +90,17 @@ class corgietc(Nemati):
                 "SystematicC",
                 "InitStatContrast",
             ]:
-                syst = self.get_coro_param(
-                    syst,
-                    param_name,
-                    expected_ndim=2,
-                    expected_first_dim=2,
-                    min_val=0.0,
-                    interp_kind="nearest",
-                    update_WAs=False,
-                    fill="extrapolate",
-                )
+                if param_name in syst:
+                    syst = self.get_coro_param(
+                        syst,
+                        param_name,
+                        expected_ndim=2,
+                        expected_first_dim=2,
+                        min_val=0.0,
+                        interp_kind="nearest",
+                        update_WAs=False,
+                        fill="extrapolate",
+                    )
 
             # ensure that CGintSamp is in the system
             syst["CGintSamp"] = syst.get("CGIintSamp", 0.1)
@@ -369,7 +370,10 @@ class corgietc(Nemati):
 
             # get contrast stability values (all are ppb in the interpolants)
             rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9
-            SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
+            if "SystematicC" in syst:
+                SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
+            else:
+                SystematicCont = 0
             ExtContStab = syst["ExtContStab"](mode["lam"], planetWA)[0] * 1e-9
             IntContStab = syst["IntContStab"](mode["lam"], planetWA)[0] * 1e-9
             selDeltaC = np.sqrt(
