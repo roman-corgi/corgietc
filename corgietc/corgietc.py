@@ -163,7 +163,7 @@ class corgietc(Nemati):
         """Add specific observing mode keywords"""
 
         self.allowed_observingMode_kws.append("Scenario")
-        self.allowed_observingMode_kws.append("strayLight")
+        self.allowed_observingMode_kws.append("StrayLight_Data")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -196,8 +196,20 @@ class corgietc(Nemati):
                 raise Exception("Instrument name must contain IMAGER or SPEC")
 
             # stray light values
+            assert "StrayLight_Data" in mode and isinstance(
+                mode["StrayLight_Data"], str
+            ), "All observing modes must have key 'StrayLight_Data'."
+
+            mode["stray_ph_s_mm2"] = fl.getStrayLightfromfile(
+                mode["Scenario"],
+                "CBE",
+                fl.loadCSVrow(
+                    os.path.normpath(os.path.expandvars(mode["StrayLight_Data"]))
+                ),
+            )
+
             mode["stray_ph_s_pix"] = (
-                mode["strayLight"] * (mode["inst"]["pixelSize"].to_value(u.mm)) ** 2
+                mode["stray_ph_s_mm2"] * (mode["inst"]["pixelSize"].to_value(u.mm)) ** 2
             )
 
             # generate inBandFlux0_sum object

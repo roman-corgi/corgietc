@@ -88,11 +88,11 @@
             "core_platescale": 1,
             "core_stability": "$CGI_PERF_DIR/CDR/Cstability/CS_HLC_NFIM_201026.csv",
             "core_stability_setting": "REQ",
-            "AvgRawContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
-            "ExtContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
-            "IntContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
-            "SystematicC": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
-            "InitStatContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_240425.csv",
+            "AvgRawContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_HLC_NFIM_250304_SCI.csv",
+            "ExtContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_HLC_NFIM_250304_SCI.csv",
+            "IntContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_HLC_NFIM_250304_SCI.csv",
+            "SystematicC": "$CGI_NOISE_DATA_DIR/Cstability/CS_HLC_NFIM_250304_SCI.csv",
+            "InitStatContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_HLC_NFIM_250304_SCI.csv",
             "CGintSamp":0.1,
             "Throughput_Data": "$CGI_NOISE_DATA_DIR/Photometry/THPT_HLC_NFB1_240725.csv"
         }, 
@@ -320,7 +320,7 @@
             "Scenario": "OPT_IMG_NFB1_HLC",
             "lam": 575,
             "SNR": 5,
-            "strayLight": 8.1
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"
         },
         {
             "instName": "WF_B4_Imager",
@@ -328,14 +328,14 @@
             "Scenario": "OPT_IMG_WFB4_SPC",
             "lam": 825,
             "SNR": 5,
-            "strayLight": 8.1},
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"},
         {
             "instName": "NF_B3_Spec",
             "systName": "OPT_B3_SPC",
             "Scenario": "OPT_SPEC_NFB3_SPC",
             "lam": 730,
             "SNR": 5,
-            "strayLight": 8.1
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"
         },
         {
             "instName": "NF_B1_Imager",
@@ -343,7 +343,7 @@
             "Scenario": "CON_IMG_NFB1_HLC",
             "lam": 575,
             "SNR": 5,
-            "strayLight": 8.1
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"
         },
         {
             "instName": "WF_B4_Imager",
@@ -351,7 +351,7 @@
             "Scenario": "CON_IMG_WFB4_SPC",
             "lam": 825,
             "SNR": 5,
-            "strayLight": 8.1
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"
         },
         {
             "instName": "NF_B3_Spec",
@@ -359,7 +359,7 @@
             "Scenario": "CON_SPEC_NFB3_SPC",
             "lam": 730,
             "SNR": 5,
-            "strayLight": 8.1
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv"
         }
 
     ],
