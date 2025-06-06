@@ -210,11 +210,11 @@
                 "InitStatContrast": "ICBE_InitStatContrast"
             },
             "occ_trans": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
-            "core_thruput": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "core_thruput": 0.0463,
             "core_mean_intensity": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
             "core_area": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
             "core_contrast": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
-            "PSFpeak": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "PSFpeak": 0.063894,
             "core_platescale": 1,
             "core_stability": "$CGI_PERF_DIR/CDR/Cstability/CS_HLC_NFIM_201026.csv",
             "core_stability_setting": "REQ",
