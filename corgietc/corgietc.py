@@ -120,35 +120,11 @@ class corgietc(Nemati):
                         )
 
                         if above_IWA:
-                            dat = np.hstack(
-                                (
-                                    np.array(
-                                        [
-                                            [
-                                                syst["IWA"]
-                                                / syst["input_angle_unit_value"],
-                                                dat[1, 0],
-                                            ]
-                                        ]
-                                    ).T,
-                                    dat,
-                                )
-                            )
+                            IWA_lD = syst["IWA"] / syst["input_angle_unit_value"]
+                            dat = np.hstack((np.array([[IWA_lD, dat[1, 0]]]).T, dat))
                         if below_OWA:
-                            np.hstack(
-                                (
-                                    dat,
-                                    np.array(
-                                        [
-                                            [
-                                                syst["OWA"]
-                                                / syst["input_angle_unit_value"],
-                                                dat[1, -1],
-                                            ]
-                                        ]
-                                    ).T,
-                                )
-                            )
+                            OWA_lD = syst["OWA"] / syst["input_angle_unit_value"]
+                            dat = np.hstack((dat, np.array([[OWA_lD, dat[1, -1]]]).T))
 
                         # the whole range is now spanned, so we can just use a regular
                         # linear interpolant:
@@ -404,7 +380,9 @@ class corgietc(Nemati):
             else:
                 planetWA = WA[jj]
 
-            if len(dMag) == 1:
+            if isinstance(dMag, (int, float)):
+                dMagi = dMag
+            elif len(dMag) == 1:
                 dMagi = dMag[0]
             else:
                 dMagi = dMag[jj]
@@ -439,13 +417,14 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9
+            WAl = np.repeat(planetWA, 1)
+            rawContrast = syst["AvgRawContrast"](mode["lam"], WAl)[0] * 1e-9
             if "SystematicC" in syst:
-                SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
+                SystematicCont = syst["SystematicC"](mode["lam"], WAl)[0] * 1e-9
             else:
                 SystematicCont = 0
-            ExtContStab = syst["ExtContStab"](mode["lam"], planetWA)[0] * 1e-9
-            IntContStab = syst["IntContStab"](mode["lam"], planetWA)[0] * 1e-9
+            ExtContStab = syst["ExtContStab"](mode["lam"], WAl)[0] * 1e-9
+            IntContStab = syst["IntContStab"](mode["lam"], WAl)[0] * 1e-9
             selDeltaC = np.sqrt(
                 (ExtContStab**2) + (IntContStab**2) + (SystematicCont**2)
             )
