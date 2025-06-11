@@ -62,16 +62,17 @@ class corgietc(Nemati):
 
     def populate_starlightSuppressionSystems_extra(self):
 
-        # add PSFPeak and contrast stability values
+        # add PSFPeak and contrast stability values as allowed parameters
         if "PSFpeak" not in self.allowed_starlightSuppressionSystem_kws:
             self.allowed_starlightSuppressionSystem_kws.append("PSFpeak")
-        for param_name in [
+        cstability_params = [
             "AvgRawContrast",
             "ExtContStab",
             "IntContStab",
             "SystematicC",
             "InitStatContrast",
-        ]:
+        ]
+        for param_name in cstability_params:
             self.allowed_starlightSuppressionSystem_kws.append(param_name)
 
         for nsyst, syst in enumerate(self.starlightSuppressionSystems):
@@ -83,24 +84,80 @@ class corgietc(Nemati):
                 min_val=0.0,
             )
 
-            for param_name in [
-                "AvgRawContrast",
-                "ExtContStab",
-                "IntContStab",
-                "SystematicC",
-                "InitStatContrast",
-            ]:
+            for param_name in cstability_params:
+                # SystematicC is optional so check for parameter presence in input
                 if param_name in syst:
-                    syst = self.get_coro_param(
-                        syst,
-                        param_name,
+                    # take a look at the data to determine what type of interpolation
+                    # to do
+                    dat, hdr = self.get_param_data(
+                        syst[param_name],
+                        left_col_name=syst["csv_angsep_colname"],
+                        param_name=syst["csv_names"][param_name],
                         expected_ndim=2,
                         expected_first_dim=2,
-                        min_val=0.0,
-                        interp_kind="nearest",
-                        update_WAs=False,
-                        fill="extrapolate",
                     )
+
+                    # if there's fewer than 3 rows, just do nearest-neighbor:
+                    if dat[0].size < 3:
+                        syst = self.get_coro_param(
+                            syst,
+                            param_name,
+                            expected_ndim=2,
+                            expected_first_dim=2,
+                            min_val=0.0,
+                            interp_kind="nearest",
+                            update_WAs=False,
+                            fill="extrapolate",
+                        )
+                    else:
+                        # if we're here, need to figure out whether the Cstability WAs
+                        # span the whole range we need for this system
+                        above_IWA = (
+                            dat[0][0] * syst["input_angle_unit_value"] >= syst["IWA"]
+                        )
+                        below_OWA = (
+                            dat[0][-1] * syst["input_angle_unit_value"] <= syst["OWA"]
+                        )
+
+                        if above_IWA:
+                            dat = np.hstack(
+                                (
+                                    np.array(
+                                        [
+                                            [
+                                                syst["IWA"]
+                                                / syst["input_angle_unit_value"],
+                                                dat[1, 0],
+                                            ]
+                                        ]
+                                    ).T,
+                                    dat,
+                                )
+                            )
+                        if below_OWA:
+                            np.hstack(
+                                (
+                                    dat,
+                                    np.array(
+                                        [
+                                            [
+                                                syst["OWA"]
+                                                / syst["input_angle_unit_value"],
+                                                dat[1, -1],
+                                            ]
+                                        ]
+                                    ).T,
+                                )
+                            )
+
+                        # the whole range is now spanned, so we can just use a regular
+                        # linear interpolant:
+                        WA, D = dat[0].astype(float), dat[1].astype(float)
+                        angunit = self.get_angle_unit_from_header(hdr, syst)
+                        WA = (WA * angunit).to_value(u.arcsec)
+                        syst[param_name] = self.create_coro_fits_param_func(
+                            WA, D, syst["lam"], 0.0
+                        )
 
             # ensure that CGintSamp is in the system
             syst["CGintSamp"] = syst.get("CGIintSamp", 0.1)
