@@ -347,7 +347,9 @@ class corgietc(Nemati):
             else:
                 planetWA = WA[jj]
 
-            if len(dMag) == 1:
+            if isinstance(dMag, (int, float)):
+                dMagi = dMag
+            elif len(dMag) == 1:
                 dMagi = dMag[0]
             else:
                 dMagi = dMag[jj]
