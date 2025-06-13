@@ -10,6 +10,10 @@ import cgi_noise.cginoiselib as fl
 import cgi_noise.unitsConstants as uc
 from cgi_noise.loadCSVrow import loadCSVrow
 from prettytable import PrettyTable
+import pandas as pd
+import EXOSIMS.Prototypes.TargetList
+import EXOSIMS.Prototypes.TimeKeeping
+import matplotlib.pyplot as plt
 
 #corgietc
 scriptfile = os.path.join(os.environ["CORGIETC_DATA_DIR"], "scripts", "CGI_Noise.json")
@@ -28,7 +32,7 @@ OS = corgietc(**copy.deepcopy(specs))
 #CON_SPEC_NFB3_SPC: science instrument [2], starlight suppression[5], observing modes [5]
 
 obs_params = {
-        "scenario": "CON_SPEC_NFB3_SPC.yml",
+        "scenario": "OPT_IMG_NFB1_HLC.yml",
         "target_params": {
             "v_mag": 5.0,
             "dist_pc": 10.0,
@@ -71,6 +75,8 @@ class corePhotonRates:
     total: float = 0.0
 
 
+ObservationCase = config['DataSpecification']['ObservationCase']
+    
 DPM = config['instrument']['Diam']
 lam = config['instrument']['wavelength']
 lamD = lam / DPM
@@ -94,11 +100,11 @@ CS_Type = config['DataSpecification']['CS_Type']
 
 IWA, OWA = fl.workingAnglePars(CG_Data, CS_Data)
 planetWA = sep_mas * uc.mas / lamD
-WA = planetWA*lamD*u.rad  #Working angle in LAMBDA/D units
 
+# from prettytable import PrettyTable
 table = PrettyTable()
 table.field_names = ['planet WA', 'phase', 'dist', 'sma', 'sep', 'lam/D', "IWA", "OWA"]
-table.add_row([f'{planetWA:.2f}', f'{target.phaseAng_deg:.2f}', f"{target.dist_pc:.2f}", f'{target.sma_AU:.2f}', f'{sep_mas:.2f}', f'{lamD/uc.mas:.2f}', f'{IWA:.2f}', f'{OWA:.2f}'])
+table.add_row([f"{planetWA:.2f}", f"{target.phaseAng_deg:.2f}", f"{target.dist_pc:.2f}", f"{target.sma_AU:.2f}", f"{sep_mas:.2f}", f"{lamD/uc.mas:.2f}", f"{IWA:.2f}", f"{OWA:.2f}"])
 print(table)
 
 tol = 0.05
@@ -109,9 +115,7 @@ elif OWA <= planetWA <= (OWA + tol):
 elif planetWA < (IWA - tol) or planetWA > (OWA + tol):
     raise ValueError(f"Planet WA={planetWA:.1f} outside of IWA={IWA:.1f}, OWA={OWA:.1f}.")
 
-selDeltaC, rawContrast, SystematicCont, initStatRawContrast, IntContStab, ExtContStab = fl.contrastStabilityPars(CS_Type, planetWA, CS_Data)
-print(f"Raw Contrast: {rawContrast:.3e}")
-print(f"Selected Delta Contrast: {selDeltaC:.3e}")
+selDeltaC, AvgRawC, SystematicC, initStatRaw, IntContStab, ExtContStab = fl.contrastStabilityPars(CS_Type, planetWA, CS_Data)
 
 cg = fl.coronagraphParameters(CG_Data.df, config, planetWA, DPM)
 f_SR, CritLam, detPixSize_m, mpix = fl.getFocalPlaneAttributes(opMode, config, DET_CBE_Data, lam, bandWidth, DPM, cg.CGdesignWL, cg.omegaPSF, DATA_DIR)
@@ -132,12 +136,12 @@ exoZodiAngFlux = inBandZeroMagFlux * 10**(-0.4 * (absMag - uc.sunAbsMag + magExo
 
 thput, throughput_rates = fl.compute_throughputs(THPT_Data, cg, "uniform")
 Acol = (np.pi / 4) * DPM**2
-stray_ph_s_mm2 = fl.getStrayLightfromfile('Threshold IMG NF B1', 'CBE', STRAY_FRN_Data)
+stray_ph_s_mm2 = fl.getStrayLightfromfile(ObservationCase, 'CBE', STRAY_FRN_Data)
 stray_ph_s_pix = stray_ph_s_mm2 * (1 / uc.mm**2) * detPixSize_m**2
 
 cphrate = corePhotonRates(
     planet=planetFlux * throughput_rates["planet"] * Acol,
-    speckle=starFlux * rawContrast * cg.PSFpeakI * cg.CGintmpix * throughput_rates["speckle"] * Acol,
+    speckle=starFlux * AvgRawC * cg.PSFpeakI * cg.CGintmpix * throughput_rates["speckle"] * Acol,
     locZodi=locZodiAngFlux * cg.omegaPSF * throughput_rates["local_zodi"] * Acol,
     exoZodi=exoZodiAngFlux * cg.omegaPSF * throughput_rates["exo_zodi"] * Acol,
     straylt=stray_ph_s_pix * mpix
@@ -146,7 +150,7 @@ cphrate.total = sum([cphrate.planet, cphrate.speckle, cphrate.locZodi, cphrate.e
 
 ENF, effReadnoise, frameTime, dQE, QE_img = fl.compute_frame_time_and_dqe(0.1, 3, 100, True, QE_Data, DET_CBE_Data, lam, mpix, cphrate.total)
 print(f"Calculated Frame Time: {frameTime:.2f} s")
-print(f'QE in the image area: {QE_img:.3f}')
+print(f"QE in the image area: {QE_img:.3f}")
 print(f"Detected Quantum Efficiency (dQE): {dQE:.3f}")
 print(f"Excess Noise Factor (ENF): {ENF:.2f}")
 print(f"Core fraction used in the SNR region for mode {config['DataSpecification']['ObservationCase']}: f_SR: {f_SR:.3f}")
@@ -172,26 +176,54 @@ nvRatesCore, residSpecRate = fl.noiseVarianceRates(
 planetSignalRate = f_SR * cphrate.planet * dQE
 timeToSNR, criticalSNR = fl.compute_tsnr(SNRdesired, planetSignalRate, nvRatesCore, residSpecRate)
 
+csfilename = None
+for filepath in filenameList:
+    base = os.path.basename(filepath)
+    if base.startswith("CS_"):
+        csfilename = os.path.splitext(base)[0]
+        break
+
+
+print("\nTotal noise variance rate beakdown:")
+table = PrettyTable()
+table.field_names = ['planet', 'speckle', 'local Zodi', 'exo Zodi', 'Stray']
+table.add_row([f"{nvRatesCore.planet:.4f}",f"{nvRatesCore.speckle:.4f}",f"{nvRatesCore.locZodi:.4f}",f"{nvRatesCore.exoZodi:.4f}",f"{nvRatesCore.straylt:.3e}",])
+print(table)
+
+print("\nContrast Stability Numbers:") 
+table = PrettyTable()
+table.field_names = ['CS case', 'DeltaC',  'External CS', 'Internal CS', 'Systematic', 'Avg Raw', 'initStatRaw']
+table.add_row([f"{csfilename}", f"{selDeltaC:.2e}", f"{ExtContStab:.2e}", f"{IntContStab:.2e}", f"{SystematicC:.2e}", f"{AvgRawC:.2e}", f"{initStatRaw:.2e}"])
+print(table)
+
+print(f"\nCalculation ingredients for Time to SNR = {SNRdesired:.1f}:")
+table = PrettyTable()
+table.field_names = [ 'planet rate', 'total noise rate', 'resid specle rate']
+table.add_row([ f"{planetSignalRate:.3f}", f"{nvRatesCore.total:.3f}", f"{residSpecRate:.4f}"])
+print(table)
+
 print(f"\nTarget SNR = {SNRdesired:.1f} \nCritical SNR = {criticalSNR:.2f}")
-print(f"Time to SNR = {timeToSNR:.1f} seconds or {timeToSNR/uc.hour:.3f} hours")
+print(f"Time to SNR = {timeToSNR:.1f} seconds or {timeToSNR/uc.hour:.3f} hours\n")
 
 if timeToSNR > intTimeDutyFactor * 100 * uc.hour:
     print(f"Warning: Time to SNR ({timeToSNR/uc.hour:.2f} hrs) exceeds usable integration time ({(intTimeDutyFactor * 100 * uc.hour)/uc.hour:.2f} hrs).")
 elif timeToSNR <= 0:
     print(f"Warning: Calculated Time to SNR is not positive ({timeToSNR/uc.hour:.2f} hrs). Check input parameters and intermediate calculations.")
+WA = planetWA*lamD*u.rad  #Working angle in LAMBDA/D units
+
 
 # === core_thruput, PSFpeak, core_area, lam, core_mean_intensity, occ_trans, core_contrast ===
 #core area is converted to arcsec^2
 table = PrettyTable()
 table.field_names = ['System', 'Occulter Transmission', 'Core Thruput', 'Core Mean Intensity', 'Core Area', 'Core Contrast', 'PSF Peak', 'lam']
-table.add_row( ['cgi_noise',f'{cg.CG_occulter_transmission}', f'{cg.CGcoreThruput}', f'{cg.CGintensity}', f'{cg.omegaPSF*lamD**2*4.255*1E10}', f'{cg.CGcontrast}', f'{cg.PSFpeakI}', f'{cg.CGdesignWL*1E9}' ] )
-table.add_row( ['corgietc',f'{OS.starlightSuppressionSystems[scenario_idx]["occ_trans"](OS.observingModes[scenario_idx]["lam"], WA)}',
-                f'{OS.starlightSuppressionSystems[scenario_idx]["core_thruput"](OS.observingModes[scenario_idx]["lam"], WA)}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["core_mean_intensity"](OS.observingModes[scenario_idx]["lam"], WA)[0]}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["core_area"](OS.observingModes[scenario_idx]["lam"], WA)}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["core_contrast"](OS.observingModes[scenario_idx]["lam"], WA)}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["PSFpeak"](OS.observingModes[scenario_idx]["lam"], WA)}',
-                f'{OS.starlightSuppressionSystems[scenario_idx]["lam"]}' ] )
+table.add_row( ['cgi_noise',f"{cg.CG_occulter_transmission}", f"{cg.CGcoreThruput}", f"{cg.CGintensity}", f"{cg.omegaPSF*lamD**2*4.255*1E10}", f"{cg.CGcontrast}", f"{cg.PSFpeakI}", f"{cg.CGdesignWL*1E9}"] )
+table.add_row( ['corgietc',f"{OS.starlightSuppressionSystems[scenario_idx]["occ_trans"](OS.observingModes[scenario_idx]["lam"], WA)}",
+                f"{OS.starlightSuppressionSystems[scenario_idx]["core_thruput"](OS.observingModes[scenario_idx]["lam"], WA)}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["core_mean_intensity"](OS.observingModes[scenario_idx]["lam"], WA)[0]}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["core_area"](OS.observingModes[scenario_idx]["lam"], WA)}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["core_contrast"](OS.observingModes[scenario_idx]["lam"], WA)}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["PSFpeak"](OS.observingModes[scenario_idx]["lam"], WA)}",
+                f"{OS.starlightSuppressionSystems[scenario_idx]["lam"]}"] )
 print(table)
 
 # === AvgRawContrast, SystematicC, InitStatContrast, IntContStab, ExtContStab ===
@@ -203,22 +235,22 @@ except KeyError:
 
 table = PrettyTable()
 table.field_names = ['System', 'Raw Contrast', 'Systematic Cont', 'initStatRawContrast', 'IntContStab', 'ExtContStab']
-table.add_row( ['cgi_noise',f'{rawContrast*1E9}', f'{SystematicCont*1E9}', f'{initStatRawContrast*1E9}', f'{IntContStab*1E9}', f'{ExtContStab*1E9}'] )
-table.add_row( ['corgietc',f'{OS.starlightSuppressionSystems[scenario_idx]["AvgRawContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0]}',
-                f'{corgi_systematicC}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["InitStatContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0]}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["IntContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0]}', 
-                f'{OS.starlightSuppressionSystems[scenario_idx]["ExtContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0]}' ] )
+table.add_row( ['cgi_noise',f"{AvgRawC*1E9}", f"{SystematicC*1E9}", f"{initStatRaw*1E9}", f"{IntContStab*1E9}", f"{ExtContStab*1E9}"] )
+table.add_row( ['corgietc',f"{OS.starlightSuppressionSystems[scenario_idx]["AvgRawContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0]}",
+                f"{corgi_systematicC}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["InitStatContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0]}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["IntContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0]}", 
+                f"{OS.starlightSuppressionSystems[scenario_idx]["ExtContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0]}"] )
 print(table)
 
 # === f_SR, CritLam, pixelSize ===
 # CritLam in m and pixel scale in mas for cgi_noise
 table = PrettyTable()
 table.field_names = ['System', 'f_SR', 'CritLam', 'pixelSize']
-table.add_row( ['cgi_noise',f'{f_SR}', f'{CritLam*1E9}', f'{detPixSize_m}'] )
-table.add_row( ['corgietc', f'{OS.observingModes[scenario_idx%3]['f_SR']}',
-                f'{OS.scienceInstruments[scenario_idx%3]['CritLam']}', 
-                f'{OS.scienceInstruments[scenario_idx%3]['pixelSize']}'] )
+table.add_row( ['cgi_noise',f"{f_SR}", f"{CritLam*1E9}", f"{detPixSize_m}"] )
+table.add_row( ['corgietc', f"{OS.observingModes[scenario_idx%3]['f_SR']}",
+                f"{OS.scienceInstruments[scenario_idx%3]['CritLam']}", 
+                f"{OS.scienceInstruments[scenario_idx%3]['pixelSize']}"] )
 print(table)
 
 # === pupilArea, pupilDiam, compbeamD, fnlFocLen, Rlamsq, Rlam, Rconst, fnumber, Rs, strayLight, stray_ph_s_pix ===
@@ -236,19 +268,22 @@ else:
     resolution = 1
 
 table = PrettyTable()
+straylight_path = os.path.expandvars(OS.observingModes[scenario_idx]['StrayLight_Data'])
+straylight = pd.read_csv(straylight_path, comment = "#")
+
 table.field_names = ['System', 'pupilArea', 'pupilDiam', 'compbeamD', 'fnlFocLen', 'Rlamsq', 'Rlam', 'Rconst', 'fnumber', 'Rs', 'strayLight', 'stray_ph_s_pix']
-table.add_row( ['cgi_noise',f'{Acol}', f'{DPM}', f'{compbeamD_m}', f'{fnlFocLen_m}', f'{Rlamsq}', f'{Rlam}', f'{Rconst}', f'{Fno}', f'{resolution}', f'{stray_ph_s_mm2}', f'{stray_ph_s_pix}']  )
-table.add_row( ['corgietc', f'{OS.pupilArea}',
-                f'{OS.pupilDiam}', 
-                f'{OS.observingModes[scenario_idx]['inst']['compbeamD']}', 
-                f'{OS.observingModes[scenario_idx]['inst']['fnlFocLen']}',
-                f'{OS.observingModes[scenario_idx]['inst']['Rlamsq']}',
-                f'{OS.observingModes[scenario_idx]['inst']['Rlam']}',
-                f'{OS.observingModes[scenario_idx]['inst']['Rconst']}',
-                f'{OS.observingModes[scenario_idx]['inst']['fnumber']}',
-                f'{OS.observingModes[scenario_idx]['inst']['Rs']}', 
-                f'{OS.observingModes[scenario_idx]['strayLight']}', 
-                f'{OS.observingModes[scenario_idx]['stray_ph_s_pix']}'] )
+table.add_row( ['cgi_noise',f"{Acol}", f"{DPM}", f"{compbeamD_m}", f"{fnlFocLen_m}", f"{Rlamsq}", f"{Rlam}", f"{Rconst}", f"{Fno}", f"{resolution}", f"{stray_ph_s_mm2}", f"{stray_ph_s_pix}"])
+table.add_row( ['corgietc', f"{OS.pupilArea}",
+                f"{OS.pupilDiam}", 
+                f"{OS.observingModes[scenario_idx]['inst']['compbeamD']}", 
+                f"{OS.observingModes[scenario_idx]['inst']['fnlFocLen']}",
+                f"{OS.observingModes[scenario_idx]['inst']['Rlamsq']}",
+                f"{OS.observingModes[scenario_idx]['inst']['Rlam']}",
+                f"{OS.observingModes[scenario_idx]['inst']['Rconst']}",
+                f"{OS.observingModes[scenario_idx]['inst']['fnumber']}",
+                f"{OS.observingModes[scenario_idx]['inst']['Rs']}", 
+                f"{straylight[OS.observingModes[scenario_idx]["Scenario"]][0]}", 
+                f"{OS.observingModes[scenario_idx]['stray_ph_s_pix']}"])
 print(table)
 
 # === Percentage differences ===
@@ -258,20 +293,44 @@ per_intensity = np.abs(OS.starlightSuppressionSystems[scenario_idx]["core_mean_i
 per_area = np.abs(OS.starlightSuppressionSystems[scenario_idx]["core_area"](OS.observingModes[scenario_idx]["lam"], WA).value - cg.omegaPSF*lamD**2*4.255*1E10)/(cg.omegaPSF*lamD**2*4.255*1E10)*100
 per_contrast = np.abs(OS.starlightSuppressionSystems[scenario_idx]["core_contrast"](OS.observingModes[scenario_idx]["lam"], WA) - cg.CGcontrast)/(cg.CGcontrast)*100
 per_lam = np.abs(OS.starlightSuppressionSystems[scenario_idx]["lam"].value - cg.CGdesignWL*1E9)/(cg.CGdesignWL*1E9)*100
-per_rawcontrast = np.abs(OS.starlightSuppressionSystems[scenario_idx]["AvgRawContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0] - rawContrast*1E9)/(rawContrast*1E9)*100
-per_initStatRawContrast = np.abs(OS.starlightSuppressionSystems[scenario_idx]["InitStatContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0] - initStatRawContrast*1E9)/(initStatRawContrast*1E9)*100
+per_rawcontrast = np.abs(OS.starlightSuppressionSystems[scenario_idx]["AvgRawContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0] - AvgRawC*1E9)/(AvgRawC*1E9)*100
+per_initStatRawContrast = np.abs(OS.starlightSuppressionSystems[scenario_idx]["InitStatContrast"](OS.observingModes[scenario_idx]["lam"], WA)[0] - initStatRaw*1E9)/(initStatRaw*1E9)*100
 per_IntContStab = np.abs(OS.starlightSuppressionSystems[scenario_idx]["IntContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0] - IntContStab*1E9)/(IntContStab*1E9)*100
 per_ExtContStab = np.abs(OS.starlightSuppressionSystems[scenario_idx]["ExtContStab"](OS.observingModes[scenario_idx]["lam"], WA)[0] - ExtContStab*1E9)/(ExtContStab*1E9)*100
 
 
-print("Occulter Transmission % difference: " + f'{per_occtrans}')
-print("Core Thruput % difference: " + f'{per_thruput}')
-print("Core Mean Intensity % difference: " + f'{per_intensity}')
-print("Core Area % difference: " + f'{per_area}')
-print("Core Contrast % difference: " + f'{per_contrast}')
-print("Lam % difference: " + f'{per_lam}')
-print("Avg Raw Contrast % difference: " + f'{per_rawcontrast}')
-print("initStatRawContrast % difference (can ignore): " + f'{per_initStatRawContrast}')
-print("IntContStab % difference (can ignore): " + f'{per_IntContStab}')
-print("ExtContStab % difference (can ignore): " + f'{per_ExtContStab}')
+print("Occulter Transmission % difference: " + f"{per_occtrans}")
+print("Core Thruput % difference: " + f"{per_thruput}")
+print("Core Mean Intensity % difference: " + f"{per_intensity}")
+print("Core Area % difference: " + f"{per_area}")
+print("Core Contrast % difference: " + f"{per_contrast}")
+print("Lam % difference: " + f"{per_lam}")
+print("Avg Raw Contrast % difference: " + f"{per_rawcontrast}")
+print("initStatRawContrast % difference (can ignore): " + f"{per_initStatRawContrast}")
+print("IntContStab % difference (can ignore): " + f"{per_IntContStab}")
+print("ExtContStab % difference (can ignore): " + f"{per_ExtContStab}")
 
+## === Integration time ===
+
+TL = EXOSIMS.Prototypes.TargetList.TargetList(**copy.deepcopy(specs))
+OS = TL.OpticalSystem
+
+# create a Timekeeping object and advance the mission time a bit
+TK = EXOSIMS.Prototypes.TimeKeeping.TimeKeeping(missionLife = 5.25)   # 63 months in years is 5.25, 21 months is 1.75
+TK.allocate_time(21*30.4375*u.d)
+sInds = 0
+fZ = np.repeat(TL.ZodiacalLight.fZ0, 1)
+mode = OS.observingModes[scenario_idx]
+JEZ = TL.JEZ0[mode["hex"]]/(obs_params["target_params"]['sma_AU']**2)
+dMag = np.array([17.5])
+WA = np.array([7.5]) * (mode["lam"]/OS.pupilDiam).to(u.arcsec, equivalencies=u.dimensionless_angles())
+intTimes = OS.calc_intTime(TL, sInds, fZ, JEZ, dMag, WA, mode, TK=TK)
+print("Integration times: " + f"{intTimes.to(u.s)}")
+dMags = np.linspace(16, 23, 100)
+intTimes = OS.calc_intTime(TL, [sInds]*len(dMags), fZ, JEZ, dMags, WA, mode, TK=TK)
+plt.figure()
+plt.semilogy(dMags, intTimes)
+plt.xlabel(r"Target $\Delta$mag")
+plt.ylabel(f"Integration Time ({intTimes.unit})")
+plt.title(fr"Maximum Achievable $\Delta$mag = {np.min(dMags[np.isnan(intTimes)]) :.2f}")
+plt.show()
