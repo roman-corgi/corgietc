@@ -7,7 +7,7 @@ from pathlib import Path
 
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 from cgi_noise import cginoiselib as fl
-from cgi_noise.main_core import corePhotonRates
+from cgi_noise.tsnr_core import corePhotonRates
 from EXOSIMS.util._numpy_compat import copy_if_needed
 import astropy.constants as const
 
@@ -465,7 +465,7 @@ class corgietc(Nemati):
             k_lzo = rdi_penalty["k_lzo"]
             k_ezo = rdi_penalty["k_ezo"]
 
-            nvRatesCore, residSpecRate = fl.noiseVarianceRates(
+            nvRatesCore, residSpecSdevRate = fl.noiseRates(
                 cphrate,
                 QE_img,
                 dQE,
@@ -487,7 +487,7 @@ class corgietc(Nemati):
             # populate outputs
             C_p[jj] = mode["f_SR"] * cphrate.planet * dQE
             C_b[jj] = nvRatesCore.total
-            C_sp[jj] = residSpecRate
+            C_sp[jj] = residSpecSdevRate
 
             # end loop through values
 
