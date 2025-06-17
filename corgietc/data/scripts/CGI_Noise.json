@@ -8,6 +8,7 @@
     "VmagFill":5,
     "distFill":10,
     "minComp": 0,
+    "Irange": [90,90],
     "pupilDiam": 2.363,
     "obscurFac": 0, 
     "missionLife": 5,
