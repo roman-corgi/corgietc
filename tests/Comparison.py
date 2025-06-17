@@ -512,6 +512,7 @@ for jj, scenario in enumerate(scenarios):
     # create a Timekeeping object and advance the mission time a bit
     dMag = np.array([-2.5 * np.log10(fluxRatio)])
     intTimes = OS.calc_intTime(TL, sInds, fZ, JEZ, dMag, WA, mode, TK=TK)
-    print(f"corgietc: Time to SNR = {intTimes[0].to(u.s) :.1f} seconds")
+    print(f"corgietc: Time to SNR = {intTimes[0].to_value(u.s) :.1f} seconds")
+    print(f"% diff={np.abs(intTimes[0].to_value(u.s) - timeToSNR)/timeToSNR*100}")
 
     print("\n\n")
