@@ -127,7 +127,7 @@ for jj, scenario in enumerate(scenarios):
     IWA, OWA = fl.workingAnglePars(CG_Data, CS_Data)
 
     # set WA
-    planetWA = 6
+    planetWA = 6.1
     if planetWA < IWA:
         planetWA = IWA
     WA = np.array([planetWA]) * (mode["lam"] / OS.pupilDiam).to(
@@ -270,6 +270,7 @@ for jj, scenario in enumerate(scenarios):
         "Core Contrast",
         "PSF Peak",
         "lam",
+        "CGintSamp",
     ]
     table.add_row(
         [
@@ -281,6 +282,7 @@ for jj, scenario in enumerate(scenarios):
             f"{cg.CGcontrast}",
             f"{cg.PSFpeakI}",
             f"{cg.CGdesignWL*1E9}",
+            f"{cg.CGintSamp}",
         ]
     )
 
@@ -313,6 +315,7 @@ for jj, scenario in enumerate(scenarios):
             f'{syst["core_contrast"](mode["lam"], WA)}',
             f"{PSFpeakI}",
             f'{syst["lam"]}',
+            f'{syst["CGintSamp"]}',
         ]
     )
     print(table)
@@ -346,11 +349,11 @@ for jj, scenario in enumerate(scenarios):
     table.add_row(
         [
             "corgietc",
-            f"{syst["AvgRawContrast"](mode["lam"], WA)[0]}",
-            f"{corgi_systematicC}",
-            f"{syst["InitStatContrast"](mode["lam"], WA)[0]}",
-            f"{syst["IntContStab"](mode["lam"], WA)[0]}",
-            f"{syst["ExtContStab"](mode["lam"], WA)[0]}",
+            f'{syst["AvgRawContrast"](mode["lam"], WA)[0]}',
+            f'{corgi_systematicC}',
+            f'{syst["InitStatContrast"](mode["lam"], WA)[0]}',
+            f'{syst["IntContStab"](mode["lam"], WA)[0]}',
+            f'{syst["ExtContStab"](mode["lam"], WA)[0]}',
         ]
     )
     print(table)
@@ -430,7 +433,7 @@ for jj, scenario in enumerate(scenarios):
             f"{mode['inst']['Rconst']}",
             f"{mode['inst']['fnumber']}",
             f"{mode['inst']['Rs']}",
-            f"{straylight[mode["Scenario"]][0]}",
+            f'{straylight[mode["Scenario"]][0]}',
             f"{mode['stray_ph_s_pix']}",
         ]
     )

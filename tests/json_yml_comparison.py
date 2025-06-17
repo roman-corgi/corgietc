@@ -328,33 +328,14 @@ for scenario in yml_scenarios:
             )
 
     # pp_Factor_CBE
-    if scenario_count == 0 or scenario_count == 3:
-        if (
-            scenario["instrument"]["pp_Factor_CBE"]
-            != json_data["scienceInstruments"][0]["pp_Factor_CBE"]
-        ):
-            errors.append(
-                str(scenario_conversion[scenario_count])
-                + " pp_Factor_CBE not matching."
-            )
-    elif scenario_count == 1 or scenario_count == 4:
-        if (
-            scenario["instrument"]["pp_Factor_CBE"]
-            != json_data["scienceInstruments"][1]["pp_Factor_CBE"]
-        ):
-            errors.append(
-                str(scenario_conversion[scenario_count])
-                + " pp_Factor_CBE not matching."
-            )
-    else:
-        if (
-            scenario["instrument"]["pp_Factor_CBE"]
-            != json_data["scienceInstruments"][2]["pp_Factor_CBE"]
-        ):
-            errors.append(
-                str(scenario_conversion[scenario_count])
-                + " pp_Factor_CBE not matching."
-            )
+    if (
+        scenario["instrument"]["pp_Factor_CBE"]
+        != json_data["observingModes"][scenario_count]["pp_Factor_CBE"]
+    ):
+        errors.append(
+            str(scenario_conversion[scenario_count])
+            + " pp_Factor_CBE not matching."
+        )
 
     # Kappa_c_HLCB1
     if "B1" in scenario["DataSpecification"]["ObservationCase"]:
@@ -396,5 +377,5 @@ for scenario in yml_scenarios:
 
     scenario_count += 1
 
-
-print(errors)
+for e in errors:
+    print(e)
