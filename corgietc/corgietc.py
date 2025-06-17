@@ -103,7 +103,7 @@ class corgietc(Nemati):
                     )
 
             # ensure that CGintSamp is in the system
-            syst["CGintSamp"] = syst.get("CGIintSamp", 0.1)
+            syst["CGintSamp"] = syst.get("CGintSamp", 0.1)
 
             # load Throughput Data
             syst["Throughput_Data"] = fl.loadCSVrow(
@@ -123,7 +123,6 @@ class corgietc(Nemati):
             "Rlamsq": None,
             "Rlam": None,
             "Rconst": None,
-            "pp_Factor_CBE": None,
         }
         self.allowed_scienceInstrument_kws += list(kws.keys())
 
@@ -164,6 +163,7 @@ class corgietc(Nemati):
 
         self.allowed_observingMode_kws.append("Scenario")
         self.allowed_observingMode_kws.append("StrayLight_Data")
+        self.allowed_observingMode_kws.append("pp_Factor_CBE")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -226,6 +226,11 @@ class corgietc(Nemati):
             )
             mode["inBandFlux0_sum"] = (
                 onlySpecEphot.sum(axis=0) * self.SPECTRA_deltaLambda
+            )
+
+            # ensure pp_Factor_CBE is in the mode
+            mode["pp_Factor_CBE"] = mode.get(
+                "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
             )
 
     def construct_cg(self, mode, WA):
@@ -478,7 +483,7 @@ class corgietc(Nemati):
                 mode["f_SR"],
                 starFlux,
                 selDeltaC,
-                inst["pp_Factor_CBE"],
+                mode["pp_Factor_CBE"],
                 cg,
                 throughput_rates["speckle"],
                 Acol,
