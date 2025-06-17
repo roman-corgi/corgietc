@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import cgi_noise
 import corgietc
+import numpy as np
 
 DATA_DIR = Path(os.environ["CGI_NOISE_DATA_DIR"])
 SCEN_DIR = DATA_DIR / "Scenarios"
@@ -62,76 +63,140 @@ scenario_conversion = {
 for scenario in yml_scenarios:
 
     # Coronagraph_Data
-    occ_trans_name = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["occ_trans"])[-1])[0]
-    core_mean_intensity_name = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["core_mean_intensity"])[-1])[0]
-    core_area_name = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["core_area"])[-1])[0]
-    core_contrast_name = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["core_contrast"])[-1])[0]
+    occ_trans_name = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["occ_trans"]
+        )[-1]
+    )[0]
+    core_mean_intensity_name = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count][
+                "core_mean_intensity"
+            ]
+        )[-1]
+    )[0]
+    core_area_name = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["core_area"]
+        )[-1]
+    )[0]
+    core_contrast_name = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["core_contrast"]
+        )[-1]
+    )[0]
     if (
         scenario["DataSpecification"]["Coronagraph_Data"] != occ_trans_name
         or scenario["DataSpecification"]["Coronagraph_Data"] != core_mean_intensity_name
         or scenario["DataSpecification"]["Coronagraph_Data"] != core_area_name
         or scenario["DataSpecification"]["Coronagraph_Data"] != core_contrast_name
     ):
-        errors.append(str(scenario_conversion[scenario_count]) + " Coronagraph_Data file not matching")
-
-
+        errors.append(
+            str(scenario_conversion[scenario_count])
+            + " Coronagraph_Data file not matching"
+        )
 
     # QE_Curve_Data
     if "B1" in scenario["DataSpecification"]["ObservationCase"]:
-        qe_0 = os.path.splitext(os.path.split(json_data["scienceInstruments"][0]["QE"])[-1])[0]
-        det_qe_0 = os.path.splitext(os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1])[0]
+        qe_0 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][0]["QE"])[-1]
+        )[0]
+        det_qe_0 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1]
+        )[0]
         if (
             qe_0 != scenario["DataSpecification"]["QE_Curve_Data"]
             or det_qe_0 != scenario["DataSpecification"]["QE_Curve_Data"]
         ):
-            errors.append(str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching")
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching"
+            )
     elif "B4" in scenario["DataSpecification"]["ObservationCase"]:
-        qe_1 = os.path.splitext(os.path.split(json_data["scienceInstruments"][1]["QE"])[-1])[0]
-        det_qe_0 = os.path.splitext(os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1])[0]
+        qe_1 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][1]["QE"])[-1]
+        )[0]
+        det_qe_0 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1]
+        )[0]
         if (
             qe_1 != scenario["DataSpecification"]["QE_Curve_Data"]
             or det_qe_0 != scenario["DataSpecification"]["QE_Curve_Data"]
         ):
-            errors.append(str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching")
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching"
+            )
     else:
-        qe_2 = os.path.splitext(os.path.split(json_data["scienceInstruments"][2]["QE"])[-1])[0]
-        det_qe_0 = os.path.splitext(os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1])[0]
+        qe_2 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][2]["QE"])[-1]
+        )[0]
+        det_qe_0 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][0]["DET_QE_Data"])[-1]
+        )[0]
         if (
             qe_2 != scenario["DataSpecification"]["QE_Curve_Data"]
             or det_qe_0 != scenario["DataSpecification"]["QE_Curve_Data"]
         ):
-            errors.append(str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching")
-
-
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " QE_Curve_Data not matching"
+            )
 
     # Detector_Data
     if "B1" in scenario["DataSpecification"]["ObservationCase"]:
-        det_data_0 = os.path.splitext(os.path.split(json_data["scienceInstruments"][0]["DET_CBE_Data"])[-1])[0]
+        det_data_0 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][0]["DET_CBE_Data"])[-1]
+        )[0]
         if det_data_0 != scenario["DataSpecification"]["Detector_Data"]:
-            errors.append(str(scenario_conversion[scenario_count]) + " Detector_Data not matching")
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " Detector_Data not matching"
+            )
     elif "B4" in scenario["DataSpecification"]["ObservationCase"]:
-        det_data_1 = os.path.splitext(os.path.split(json_data["scienceInstruments"][1]["DET_CBE_Data"])[-1])[0]
+        det_data_1 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][1]["DET_CBE_Data"])[-1]
+        )[0]
         if det_data_1 != scenario["DataSpecification"]["Detector_Data"]:
-            errors.append(str(scenario_conversion[scenario_count]) + " Detector_Data not matching")
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " Detector_Data not matching"
+            )
     else:
-        det_data_2 = os.path.splitext(os.path.split(json_data["scienceInstruments"][2]["DET_CBE_Data"])[-1])[0]
+        det_data_2 = os.path.splitext(
+            os.path.split(json_data["scienceInstruments"][2]["DET_CBE_Data"])[-1]
+        )[0]
         if det_data_2 != scenario["DataSpecification"]["Detector_Data"]:
-            errors.append(str(scenario_conversion[scenario_count]) + " Detector_Data not matching")
-
+            errors.append(
+                str(scenario_conversion[scenario_count]) + " Detector_Data not matching"
+            )
 
     # ContrastStability_Data
-    avg_raw = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["AvgRawContrast"])[-1])[0]
-    ext_stab = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["ExtContStab"])[-1])[0]
-    int_stab = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["IntContStab"])[-1])[0]
-    init_stat = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["InitStatContrast"])[-1])[0]
+    avg_raw = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["AvgRawContrast"]
+        )[-1]
+    )[0]
+    ext_stab = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["ExtContStab"]
+        )[-1]
+    )[0]
+    int_stab = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["IntContStab"]
+        )[-1]
+    )[0]
+    init_stat = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["InitStatContrast"]
+        )[-1]
+    )[0]
     if (
         scenario["DataSpecification"]["ContrastStability_Data"] != avg_raw
         or scenario["DataSpecification"]["ContrastStability_Data"] != ext_stab
         or scenario["DataSpecification"]["ContrastStability_Data"] != int_stab
         or scenario["DataSpecification"]["ContrastStability_Data"] != init_stat
     ):
-        errors.append(str(scenario_conversion[scenario_count]) + " ContrastStability_Data file not matching")
-
+        errors.append(
+            str(scenario_conversion[scenario_count])
+            + " ContrastStability_Data file not matching"
+        )
 
     # CS_Type
     if (
@@ -161,16 +226,28 @@ for scenario in yml_scenarios:
         )
 
     # Throughput_Data
-    throughput_name = os.path.splitext(os.path.split(json_data["starlightSuppressionSystems"][scenario_count]["Throughput_Data"])[-1])[0]
+    throughput_name = os.path.splitext(
+        os.path.split(
+            json_data["starlightSuppressionSystems"][scenario_count]["Throughput_Data"]
+        )[-1]
+    )[0]
     if scenario["DataSpecification"]["Throughput_Data"] != throughput_name:
-        errors.append(str(scenario_conversion[scenario_count]) + " Throughput Data file not matching")
-
+        errors.append(
+            str(scenario_conversion[scenario_count])
+            + " Throughput Data file not matching"
+        )
 
     # StrayLight_Data
-    stray_name = os.path.splitext(os.path.split(json_data["observingModes"][scenario_count]["StrayLight_Data"])[-1])[0]
+    stray_name = os.path.splitext(
+        os.path.split(json_data["observingModes"][scenario_count]["StrayLight_Data"])[
+            -1
+        ]
+    )[0]
     if scenario["DataSpecification"]["StrayLight_Data"] != stray_name:
-        errors.append(str(scenario_conversion[scenario_count]) + " StrayLight_Data file not matching")
-
+        errors.append(
+            str(scenario_conversion[scenario_count])
+            + " StrayLight_Data file not matching"
+        )
 
     # Diameter
     if scenario["instrument"]["Diam"] != json_data["pupilDiam"]:
@@ -283,18 +360,25 @@ for scenario in yml_scenarios:
     if "B1" in scenario["DataSpecification"]["ObservationCase"]:
         if "OPT" in scenario["DataSpecification"]["ObservationCase"]:
             if (
-                scenario["TVACmeasured"]["Kappa_c_HLCB1"]
-                * scenario["TVACmeasured"]["CoreThput_HLCB1"]
-                != json_data["starlightSuppressionSystems"][0]["PSFpeak"]
+                np.abs(
+                    scenario["TVACmeasured"]["Kappa_c_HLCB1"]
+                    * scenario["TVACmeasured"]["CoreThput_HLCB1"]
+                    - json_data["starlightSuppressionSystems"][0]["PSFpeak"]
+                )
+                > 1e-15
             ):
+
                 errors.append(
                     str(scenario_conversion[scenario_count]) + " PSF peak not matching"
                 )
         if "CON" in scenario["DataSpecification"]["ObservationCase"]:
             if (
-                scenario["TVACmeasured"]["Kappa_c_HLCB1"]
-                * scenario["TVACmeasured"]["CoreThput_HLCB1"]
-                != json_data["starlightSuppressionSystems"][3]["PSFpeak"]
+                np.abs(
+                    scenario["TVACmeasured"]["Kappa_c_HLCB1"]
+                    * scenario["TVACmeasured"]["CoreThput_HLCB1"]
+                    - json_data["starlightSuppressionSystems"][3]["PSFpeak"]
+                )
+                > 1e-15
             ):
                 errors.append(
                     str(scenario_conversion[scenario_count]) + " PSF peak not matching"
