@@ -9,16 +9,19 @@ The ETC can be run entirely via your browser, with no local installation require
 
 Navigate to:
 
-https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/00_Google_Colab_Setup.ipynb
+https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/00_Google_Colab_Setup.ipynb
 
 Ensure that you are logged in with the Google account you wish to use (data will be written to the Google Drive associated with this account).  You can check which account you are logged into by clicking on the user icon in the top right-hand corner of the page. 
 
 Execute all of the cells in the notebook, responding to any pop-up prompts along the way (see the notebook for more detailed instructions). Note that you only need to run this notebook **once** (even if you log out/close the browser instance, the files written to your Google Drive will be persistent).
 
-After successfully executing the setup notebook, navigate to any of the other notebooks, either by opening them directly in Colab (see instructions at the end of the setup notebook) or by pre-pending `https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/` to the name of any of the notebooks.  So, for example, you can directly access the first notebook by navigating to:
+After successfully executing the setup notebook, navigate to any of the other notebooks.  You may do so directly via Colab by clicking on the `File` menu (at the top left of the page) and selecting `Open Notebook`. Select `GitHub` in the left-hand pane of the dialog that appears, make sure that `roman-corgi` is entered in the top text box and select the `roman-corgi/corgietc` repository from the dropdown menu.  A list of all available notebooks should appear. You may see a `Leave Page` (or equivalent) prompt - it is okay to proceed. 
 
-https://colab.research.google.com/github/roman-corgi/corgietc/blob/cgi_noise2/Notebooks/01_Anatomy_of_an_Integration_Time_Calculation.ipynb 02_Getting_to_Know_Your_Observing_Mode.ipynb
+Alternatively, you may access any notebooks directly by pre-pending `https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/` to the name of any of the notebooks.  So, for example, you can directly access the first notebook by navigating to:
 
+https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/01_Anatomy_of_an_Integration_Time_Calculation.ipynb 02_Getting_to_Know_Your_Observing_Mode.ipynb
+
+Executing the setup notebook will create a directory called `corgietc` in your Google Drive.  At any point, you may remove this directory entirely from your Google drive and re-run the setup notebook to get a fresh installation of `corgietc`. This should not be necessary in ordinary usage, but may be helpful if the contents of this directory become corrupted for any reason. 
 
 ### Method 2: Local Installation
 
@@ -47,7 +50,6 @@ We **strongly** recommend use of a dedicated Python virtual environment.  The in
 7. Once `cgi_noise` successfully installs, navigate to the cloned/downlaoded `corgietc` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
 
     ```
-    git checkout cgi_noise2
     pip install .
     ```
     
