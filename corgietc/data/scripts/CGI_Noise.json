@@ -1,0 +1,122 @@
+{
+    "optional_filters": {
+            "outside_IWA_filter": {"enabled": false},
+            "completeness_filter": {"enabled": false},
+            "binary_filter": {"enabled": false}
+    },
+    "filterBinaries": false,
+    "VmagFill":5,
+    "distFill":10,
+    "minComp": 0,
+    "pupilDiam": 2.363,
+    "obscurFac": 0, 
+    "missionLife": 5,
+    "missionPortion": 1.0,
+    "fillPhotometry":true,
+    "explainFiltering":true,
+    "scienceInstruments": [
+        {
+            "name": "NF_B1_Imager",
+            "CritLam": 500,
+            "pixelSize": 1.3e-05,
+            "QE": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_QE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_CBE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_CBE_250530.csv"
+        },
+        {
+            "name": "WF_B4_Imager",
+            "CritLam": 500,
+            "pixelSize": 1.3e-05,
+            "QE": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_QE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_CBE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_CBE_250530.csv"
+        },
+        {
+            "name": "NF_B3_Spec",
+            "CritLam": 500,
+            "pixelSize": 1.3e-05,
+            "compbeamD": 0.005,
+            "fnlFocLen": 0.26,
+            "PSF_x_lamD": 0.942, 
+            "PSF_y_lamD": 0.45, 
+            "Rlamsq": 0.000854964, 
+            "Rlam": -1.513136232,
+            "Rconst": 707.8977209,
+            "Rs": 50,
+            "QE": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_QE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_QE_e2v_Spec.csv",
+            "DET_CBE_Data": "$CGI_NOISE_DATA_DIR/Photometry/DET_CBE_250530.csv"
+        }
+    ],
+    "starlightSuppressionSystems": [
+        {
+            "name": "OPT_B1_HLC",
+            "csv_angsep_colname": "r_lam_D",
+            "input_angle_units": "LAMBDA/D",
+            "IWA": 3.1,
+            "OWA": 8.9,
+            "lam": 575,
+            "BW": 0.10,
+            "Rs": 0,
+            "Nlensl": 5.0,
+            "lenslSamp": 2.0,
+            "koAngles_Sun": [45.0, 180.0],
+            "koAngles_Earth": [45.0, 180.0],
+            "koAngles_Moon": [45.0, 180.0],
+            "koAngles_Small": [1.0, 180.0],
+            "csv_names": {
+                "occ_trans": "occTrans",
+                "core_thruput": "coreThruput",
+                "core_mean_intensity": "I",
+                "core_area": "area_sq_arcsec",
+                "core_contrast": "contrast",
+                "AvgRawContrast": "MCBE_AvgRawContrast",
+                "ExtContStab": "MCBE_ExtContStab",
+                "IntContStab": "MCBE_IntContStab",
+                "SystematicC": "MCBE_SystematicC",
+                "InitStatContrast": "MCBE_InitStatContrast"
+            },
+            "occ_trans": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "core_thruput": 0.0463,
+            "core_mean_intensity": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "core_area": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "core_contrast": "$CGI_NOISE_DATA_DIR/Photometry/CGPERF_HLC_NFB1_190210.csv",
+            "PSFpeak": 0.063894,
+            "core_platescale": 1,
+            "AvgRawContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_250616_OPT.csv",
+            "ExtContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_250616_OPT.csv",
+            "IntContStab": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_250616_OPT.csv",
+            "SystematicC": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_250616_OPT.csv",
+            "InitStatContrast": "$CGI_NOISE_DATA_DIR/Cstability/CS_NFB1_HLC_250616_OPT.csv",
+            "CGintSamp":0.1,
+            "Throughput_Data": "$CGI_NOISE_DATA_DIR/Photometry/THPT_HLC_NFB1_240725.csv"
+        } 
+    ],
+    "observingModes":[
+        {
+            "instName": "NF_B1_Imager",
+            "systName": "OPT_B1_HLC",
+            "Scenario": "OPT_IMG_NFB1_HLC",
+            "lam": 575,
+            "SNR": 5,
+            "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
+            "pp_Factor_CBE": 2.0
+        }
+    ],
+ "modules": {
+   "PlanetPopulation": " ",
+   "StarCatalog": " ",
+   "OpticalSystem": "$CORGIETC_DATA_DIR/../corgietc.py",
+   "ZodiacalLight": "Stark",
+   "BackgroundSources": "GalaxiesFaintStars",
+   "PlanetPhysicalModel": "ForecasterMod",
+   "Observatory": " ",
+   "TimeKeeping": " ",
+   "PostProcessing": " ",
+   "Completeness": " ",
+   "TargetList": " ",
+   "SimulatedUniverse": " ",
+   "SurveySimulation": " ",
+   "SurveyEnsemble": " "
+ }
+}
