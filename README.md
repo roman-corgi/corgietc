@@ -19,7 +19,7 @@ After successfully executing the setup notebook, navigate to any of the other no
 
 Alternatively, you may access any notebooks directly by pre-pending `https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/` to the name of any of the notebooks.  So, for example, you can directly access the first notebook by navigating to:
 
-https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/01_Anatomy_of_an_Integration_Time_Calculation.ipynb 02_Getting_to_Know_Your_Observing_Mode.ipynb
+https://colab.research.google.com/github/roman-corgi/corgietc/blob/main/Notebooks/01_Anatomy_of_an_Integration_Time_Calculation.ipynb
 
 Executing the setup notebook will create a directory called `corgietc` in your Google Drive.  At any point, you may remove this directory entirely from your Google drive and re-run the setup notebook to get a fresh installation of `corgietc`. This should not be necessary in ordinary usage, but may be helpful if the contents of this directory become corrupted for any reason. 
 
