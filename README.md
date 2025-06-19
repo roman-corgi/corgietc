@@ -57,7 +57,7 @@ We **strongly** recommend use of a dedicated Python virtual environment.  The in
  
 8. You will also need a Jypyter environment to execute the notebooks.  We recommend jupyter-lab, which can be installed by running (from any directory):
 
-    ```pip install jupyter-lab```
+    ```pip install jupyterlab```
 
 
 9. Navigate to the `Notebooks` subdirectory of the repository (this should just be `cd Notebooks` from where you were last) and then start JupyterLab by running `jupyter-lab`
