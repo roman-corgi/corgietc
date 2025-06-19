@@ -35,11 +35,11 @@ We **strongly** recommend use of a dedicated Python virtual environment.  The in
    
    ```python -m venv corgietc```
    
-3. Activate the environment. On macOS/Linux:
+3. Activate the environment. On macOS/Linux (if using a bash/zsh shell):
 
     ```source corgietc/bin/activate```
 
-   For Windows, see https://docs.python.org/3/library/venv.html
+   For Windows, see https://docs.python.org/3/library/venv.html.  If using a different shell on macOS/Linux, see here: https://docs.python.org/3/library/venv.html#how-venvs-work.  To determine which shell you're using, use the command `echo $SHELL`.
 
 5. In the same terminal with the active virtual environment, navigate to the cloned/downloaded `cgi_noise` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
 
