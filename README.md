@@ -27,56 +27,91 @@ Executing the setup notebook will create a directory called `corgietc` in your G
 
 If you wish to run the ETC on your own computer, you must first install all required packages and download all relevant data.  
 
-We **strongly** recommend use of a dedicated Python virtual environment.  The instructions below assume that you have Python (version 3.10 or higher) and pip installed and working on your machine. For help with that, start here: https://wiki.python.org/moin/BeginnersGuide/. We'll assume that Python and pip are executable as `python` and `pip`, respectively, but they might be called `python3` and `pip3` (or something else) on your particular system. These instructions are based on working in a terminal (macOS/Linux) or command prompt/PowerShell (Windows). You also need to have git installed (https://github.com/git-guides/install-git) and executable as `git`. 
+We **strongly** recommend use of a dedicated Python virtual environment.  The instructions below assume that you have Python (version 3.10 or higher) and pip installed and working on your machine. For help with that, start here: https://wiki.python.org/moin/BeginnersGuide/. We'll assume that Python and pip are executable as `python` and `pip`, respectively, but they might be called `python3` and `pip3` (or something else) on your particular system. You also need to have git installed (https://github.com/git-guides/install-git). These instructions are based on working in a terminal (macOS/Linux) or command prompt/PowerShell (Windows).
 
-1. Clone the corgietc repository (https://github.com/roman-corgi/corgietc) and the cgi_noise repository (https://github.com/roman-corgi/cgi_noise) to your computer (see here for help on this: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository).
+The steps below assume that you are on a POSIX system (e.g. macOS or Linux) and running a bash/zsh-style shell.  Where relevant, we have included links to documentation on how certain steps may differ on other systems/shells. 
 
-2. Create a python virtual environment (we'll call ours `corgietc` but you can replace this with any name you like). In a terminal/command prompt/powershell/etc, navigate to a directory where you want to create the virtual environment and run:
+1. Clone the corgietc repository (https://github.com/roman-corgi/corgietc) and the cgi_noise repository (https://github.com/roman-corgi/cgi_noise) to your computer (see here for help on this: https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository). Place these in any directory on disk - we will refer to the directory where you cloned these two repositories as `$CODE_ROOT`.
+
+2. Create a python virtual environment (we'll call ours `corgietc_env` but you can replace this with any name you like). We will place our virtual environment directory in the same place as our cloned repositories, but you can put the virtual environment anywhere on disk (just keep track of where things are). In a terminal/command prompt/powershell/etc run:
    
-   ```python -m venv corgietc```
+   ```
+   cd $CODE_ROOT
+   python -m venv corgietc_env
+   ```
+   
+   >**Warning** The `cd $CODE_ROOT` command will work as written only on POSIX systems (not Windows, which has a different environment variable syntax) and *only* if you have exported the environment variable `CODE_ROOT` to point at the directory where you wish to store things. You can do so in a bash/zsh shell by first executing:
+   
+   ```
+   export CODE_ROOT="/full/path/to/CODE_ROOT"
+   ```
+
+   This step is entirely optional - if you prefer not to set the environment variable, simply replace all instances of `$CODE_ROOT` in these instructions with the full path to your code root directory. If you'd like to use environment variables in a different shell/system, or make them persistent across multiple sessions, see the relevant documentation for your particular system configuration. 
    
 3. Activate the environment. On macOS/Linux (if using a bash/zsh shell):
 
-    ```source corgietc/bin/activate```
+    ```source corgietc_env/bin/activate```
 
-   For Windows, see https://docs.python.org/3/library/venv.html.  If using a different shell on macOS/Linux, see here: https://docs.python.org/3/library/venv.html#how-venvs-work.  To determine which shell you're using, use the command `echo $SHELL`.
+   For Windows, see https://docs.python.org/3/library/venv.html.  If using a different shell on macOS/Linux, see here: https://docs.python.org/3/library/venv.html#how-venvs-work.  To determine which shell you're using on a POSIX system, use the command `echo $SHELL`. For tcsh/csh shells, the relevant command is:
 
-5. In the same terminal with the active virtual environment, navigate to the cloned/downloaded `cgi_noise` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
+   ```source corgietc_env/bin/activate.csh```
 
-    ```pip install .```
-
-   Do not omit the period at the end - it is important. 
-
-7. Once `cgi_noise` successfully installs, navigate to the cloned/downlaoded `corgietc` repository.  From the top level directory of the repository (the one that contains the file `pyproject.toml`) run:
+4. In the same terminal with the active virtual environment, navigate to the cloned/downloaded `cgi_noise` repository and run the install command:
 
     ```
+    cd $CODE_ROOT/cgi_noise
     pip install .
     ```
+
+   Do not omit the period at the end - it is important. To check whether you are in a session with the virtual environment active, look at the left-hand side of your command prompt - if the environment is active, it should show the environment name in parentheses (e.g., `(corgietc_env)`). 
+
+5. Once `cgi_noise` successfully installs, navigate to the cloned/downlaoded `corgietc` repository and run the install command:
+
+    ```
+    cd $CODE_ROOT/corgietc
+    pip install .
+    ```
+     
+6. You will also need a Jupyter environment (we recommend jupyter-lab) to execute the notebooks and matplotlib to plot results. These can be installed by running (still in the same session with the active virtual environment):
+
+    ```pip install jupyterlab matplotlib```
+
+7. Restart your virtual environment.  While possibly not necessary, on many systems, the JupyterLab executable will not be automatically found unless you restart the environment or otherwise rescan your path.  The simplest thing to do is to restart the virtual environment:
+
+    ```
+    deactivate
+    source $CODE_ROOT/corgietc_env/bin/activate.csh
+    ```
+
+8. In the terminal with the active virtual environment session, navigate to the `Notebooks` subdirectory of the repository and start JupyterLab:
+
+    ```
+    cd $CODE_ROOT/corgietc/Notebooks
+    jupyter-lab
+    ```
+
+   >**Warning** Note that the JupyterLab executable has a different from the package.  The JupyterLab package is `jupyterlab` (no hyphen) whereas the executable is `jupyter-lab` (with hyphen). The command `jupyter lab` (space instead of hyphen) is an equivalent variant.
     
-    This will install all of the python packages required by the demo notebooks.
- 
-8. You will also need a Jypyter environment to execute the notebooks.  We recommend jupyter-lab, which can be installed by running (from any directory):
+9. A JupyterLab instance should start up in your default browser.  In the left-hand pane double-click on any of the Notebooks (`ipynb` files) to open it.  If you do not see any notebooks listed, make sure you have the file viewer up by clicking on the Folder icon on the left-hand side of the screen. Skip the code blocks of any notebook that are marked as for Collab execution only.
 
-    ```pip install jupyterlab```
+10. To stop JupyterLab, type `ctrl+c` in the terminal where it is running and then hit `ctrl+c` again (or type `y` at the prompt). To deactivate the virtual environment type `deactivate` at the prompt.  Next time you want to run the Notebooks again, you activate the environment again, navigate to the Notebooks directory and run `jupyter-lab`:
 
+    ```
+    source $CODE_ROOT/corgietc_env/bin/activate.csh
+    cd $CODE_ROOT/corgietc/Notebooks
+    jupyter-lab
+    ```
 
-9. Navigate to the `Notebooks` subdirectory of the repository (this should just be `cd Notebooks` from where you were last) and then start JupyterLab by running `jupyter-lab`
-
-10. Skip the code blocks of any notebook that are marked as for Collab execution only.
-
-11. To stop JupyterLab, type `ctrl+c` in the terminal where it is running and then hit `ctrl+c` again (or type `y` at the prompt). To deactivate the virtual environment just type `deactivate` at the prompt.  Next time you want to run the tutorials again, you just activate the environment again, navigate to the Notebooks directory and run `jupyter-lab`
-
->**Warning**
->There appears to be an issue (at least on macOS) where if you already have jupyter-lab installed in a system path, it will be executed initially instead of the one you install in your virtual environment.  A simple fix is to deactivate and re-activate the virtual environment after you run the initial pip installation (i.e., between steps 6 and 7).  Environments can be deactivated by running `deactivate` in the terminal where the environment is active, and then re-activated by sourcing the same file as in step 3. 
+   >**Warning** If you set the `CODE_ROOT` environment variable in one terminal session, it will not be persist across different terminal sessions.  You must define it each time, or add it to your shell configuration file (see your system's documentation for details) or just use the full path to the code root directory in all commands. 
 
 ### Updating corgietc
 
 If using `corgietc` via Google Colab, updates occur automatically - no user action is required. Each time you run one of the notebooks, you will automatically be using the latest code version.  Occassionally, Google Colab may hold on to a stale notebook version.  You can fix this by deleting the current runtime (in the `Runtime` menu) and clearing your browser cache. 
 
-For local installations, run `git pull` in the repository directory, and then upgrade the installed version in your virtual environment by executing 
+For local installations, run `git pull` in both repository directories (`corgietc` and `cgi_noise`), and then upgrade the installed version in your virtual environment by executing 
 
 ```pip install --upgrade .```
 
-from the repository top level.
+from each repository top level.
 
 
