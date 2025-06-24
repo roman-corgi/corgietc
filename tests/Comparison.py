@@ -34,10 +34,10 @@ print("\n\n")
 scenarios = [
     "OPT_IMG_NFB1_HLC",
     "CON_IMG_NFB1_HLC",
-#    "OPT_SPEC_NFB3_SPC",
-#    "CON_SPEC_NFB3_SPC",
-#    "OPT_IMG_WFB4_SPC",
-#    "CON_IMG_WFB4_SPC",
+    "OPT_SPEC_NFB3_SPC",
+    "CON_SPEC_NFB3_SPC",
+    "OPT_IMG_WFB4_SPC",
+    "CON_IMG_WFB4_SPC",
 ]
 
 # for scenario in scenarios:
