@@ -10,6 +10,7 @@ from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
 from EXOSIMS.util._numpy_compat import copy_if_needed
 import astropy.constants as const
+import scipy.interpolate
 
 
 class corgietc(Nemati):
@@ -65,16 +66,19 @@ class corgietc(Nemati):
         # add PSFPeak and contrast stability values
         if "PSFpeak" not in self.allowed_starlightSuppressionSystem_kws:
             self.allowed_starlightSuppressionSystem_kws.append("PSFpeak")
-        for param_name in [
+
+        cstability_params = [
             "AvgRawContrast",
             "ExtContStab",
             "IntContStab",
             "SystematicC",
             "InitStatContrast",
-        ]:
+        ]
+        for param_name in cstability_params:
             self.allowed_starlightSuppressionSystem_kws.append(param_name)
 
         for nsyst, syst in enumerate(self.starlightSuppressionSystems):
+            # process PSFPeak
             syst = self.get_coro_param(
                 syst,
                 "PSFpeak",
@@ -83,24 +87,42 @@ class corgietc(Nemati):
                 min_val=0.0,
             )
 
-            for param_name in [
-                "AvgRawContrast",
-                "ExtContStab",
-                "IntContStab",
-                "SystematicC",
-                "InitStatContrast",
-            ]:
+            for param_name in cstability_params:
+                # SystematicC is optional so check for parameter presence in input
                 if param_name in syst:
-                    syst = self.get_coro_param(
-                        syst,
-                        param_name,
+                    # load the data
+                    dat, hdr = self.get_param_data(
+                        syst[param_name],
+                        left_col_name=syst["csv_angsep_colname"],
+                        param_name=syst["csv_names"][param_name],
                         expected_ndim=2,
                         expected_first_dim=2,
-                        min_val=0.0,
-                        interp_kind="nearest",
-                        update_WAs=False,
-                        fill="extrapolate",
                     )
+                    WA, D = dat[0].astype(float), dat[1].astype(float)
+
+                    # if the first entry is larger than the IWA, update it to the IWA
+                    if WA[0] * syst["input_angle_unit_value"] > syst["IWA"]:
+                        WA[0] = (
+                            (syst["IWA"] / syst["input_angle_unit_value"])
+                            .decompose()
+                            .value
+                        )
+                    WA = WA * syst["input_angle_unit_value"]
+
+                    # generate previous entry lookup
+                    Dinterp = scipy.interpolate.interp1d(
+                        WA,
+                        D,
+                        kind="previous",
+                        fill_value="extrapolate",
+                        bounds_error=False,
+                    )
+
+                    # create a callable lambda function. for coronagraphs, we need to
+                    # scale the angular separation by wavelength
+                    syst[param_name] = lambda lam, s, Dinterp=Dinterp, lam0=syst[
+                        "lam"
+                    ]: np.array(Dinterp((s * lam0 / lam).to_value("arcsec")), ndmin=1)
 
             # ensure that CGintSamp is in the system
             syst["CGintSamp"] = syst.get("CGintSamp", 0.1)
