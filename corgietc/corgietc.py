@@ -97,7 +97,7 @@ class corgietc(Nemati):
                         expected_ndim=2,
                         expected_first_dim=2,
                         min_val=0.0,
-                        interp_kind="nearest",
+                        interp_kind="previous",
                         update_WAs=False,
                         fill="extrapolate",
                     )
