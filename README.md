@@ -108,10 +108,15 @@ The steps below assume that you are on a POSIX system (e.g. macOS or Linux) and 
 
 If using `corgietc` via Google Colab, updates occur automatically - no user action is required. Each time you run one of the notebooks, you will automatically be using the latest code version.  Occassionally, Google Colab may hold on to a stale notebook version.  You can fix this by deleting the current runtime (in the `Runtime` menu) and clearing your browser cache. 
 
-For local installations, run `git pull` in both repository directories (`corgietc` and `cgi_noise`), and then upgrade the installed version in your virtual environment by executing 
+For local installations, run `git pull` in both repository directories (`corgietc` and `cgi_noise`).  If using a virtual environment, make sure that it is active (see installation instruction, above, on how to activate/deactivate environments). Then:
 
-```pip install --upgrade .```
+```
+cd $CODE_ROOT/cgi_noise
+pip install --upgrade .
+cd ../corgietc
+pip install --upgrade .
+```
 
-from each repository top level.
+The same caveats apply as in the installation instructions - if you have not defined the `$CODE_ROOT` environment variable, simply replace it with the full path to the folder in which you cloned the github repositories. 
 
 
