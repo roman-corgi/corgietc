@@ -553,6 +553,7 @@ class corgietc(Nemati):
             Temporary. To be Updated.
 
         """
+
         # cast sInds to array
         sInds = np.array(sInds, ndmin=1)
 
@@ -562,10 +563,17 @@ class corgietc(Nemati):
 
         # Initialize result array
         dMags = np.zeros(len(sInds))
+        messages = []
+        successes = np.zeros(len(sInds))
 
         for i, int_time in enumerate(tqdm(intTimes, delay=2)):
             if int_time == 0:
                 warnings.warn("calc_dMag_per_intTime received intTime=0, returning nan.")
+                dMags[i] = np.nan
+                continue
+
+            if np.isnan(int_time):
+                warnings.warn("calc_dMag_per_intTime receive intTime = Nan, returning nan.")
                 dMags[i] = np.nan
                 continue
 
@@ -649,6 +657,11 @@ class corgietc(Nemati):
                         dMag = dMag_min_res["x"][0] if isinstance(dMag_min_res["x"], np.ndarray) else dMag_min_res["x"]
                         time_diff = dMag_min_res["fun"]
 
+                        # status check
+
+                        message = dMag_min_res["message"][0] if isinstance(dMag_min_res["message"], np.ndarray) else dMag_min_res["message"]
+                        success = dMag_min_res["success"][0] if isinstance(dMag_min_res["success"], np.ndarray) else dMag_min_res["success"]
+
                         if (time_diff > int_time.to(u.day).value / 20) or (
                             np.abs(dMag - dMag_lb) < 0.01
                         ):
@@ -663,5 +676,7 @@ class corgietc(Nemati):
                     dMag = np.nan
 
             dMags[i] = dMag
+            messages.append(message)
+            successes[i] = success
 
-        return dMags
+        return dMags, messages, success
