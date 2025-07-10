@@ -104,14 +104,30 @@ The steps below assume that you are on a POSIX system (e.g. macOS or Linux) and 
 
    >**Warning** If you set the `CODE_ROOT` environment variable in one terminal session, it will not be persist across different terminal sessions.  You must define it each time, or add it to your shell configuration file (see your system's documentation for details) or just use the full path to the code root directory in all commands. 
 
+#### Editable Installs (For Developers)
+If you are planning on modifying/adding to corgietc, you may wish to install all packages in editable/developer mode.  This type of installation allows for changes to the source to be picked up at runtime as soon as a module is loaded (or reloaded), without having to reinstall anything.  For more information on editable installs, see here: https://setuptools.pypa.io/en/latest/userguide/development_mode.html
+
+To make your installations editable, just add `-e` to each `pip` command, as in:
+```
+pip install -e .
+```
+
 ### Updating corgietc
 
 If using `corgietc` via Google Colab, updates occur automatically - no user action is required. Each time you run one of the notebooks, you will automatically be using the latest code version.  Occassionally, Google Colab may hold on to a stale notebook version.  You can fix this by deleting the current runtime (in the `Runtime` menu) and clearing your browser cache. 
 
-For local installations, run `git pull` in both repository directories (`corgietc` and `cgi_noise`), and then upgrade the installed version in your virtual environment by executing 
+For local installations, if using a virtual environment, make sure that it is active (see installation instruction, above, on how to activate/deactivate environments). Then:
 
-```pip install --upgrade .```
+```
+cd $CODE_ROOT/cgi_noise
+git pull
+pip install --upgrade .
 
-from each repository top level.
+cd ../corgietc
+git pull
+pip install --upgrade .
+```
+
+The same caveats apply as in the installation instructions - if you have not defined the `$CODE_ROOT` environment variable, simply replace it with the full path to the folder in which you cloned the github repositories. 
 
 
