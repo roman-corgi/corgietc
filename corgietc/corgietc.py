@@ -564,7 +564,7 @@ class corgietc(Nemati):
         # Initialize result array
         dMags = np.zeros(len(sInds))
         messages = []
-        successes = np.zeros(len(sInds))
+        successes = []
 
         for i, int_time in enumerate(tqdm(intTimes, delay=2)):
             if int_time == 0:
@@ -677,6 +677,8 @@ class corgietc(Nemati):
 
             dMags[i] = dMag
             messages.append(message)
-            successes[i] = success
+            successes.append(success)
 
-        return dMags, messages, success
+        return dMags, messages, successes
+    
+
