@@ -106,3 +106,8 @@ venv.bak/
 
 .*.swp
 .DS_Store
+Include/
+Lib/
+Scripts/
+share/
+etc/
