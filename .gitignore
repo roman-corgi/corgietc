@@ -112,3 +112,4 @@ Scripts/
 share/
 etc/
 Scripts
+pyvenv.cfg
