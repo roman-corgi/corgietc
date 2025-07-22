@@ -11,6 +11,8 @@ from cgi_noise.tsnr_core import corePhotonRates
 from EXOSIMS.util._numpy_compat import copy_if_needed
 import astropy.constants as const
 import scipy.interpolate
+from tqdm import tqdm
+from scipy.optimize import minimize, root_scalar
 
 
 class corgietc(Nemati):
@@ -533,6 +535,7 @@ class corgietc(Nemati):
         C_sp=None,
         TK=None,
         analytic_only=False,
+        debug = False,
     ):
         """Finds achievable planet delta magnitude for one integration
         time per star in the input list at one working angle.
@@ -573,18 +576,156 @@ class corgietc(Nemati):
             Temporary. To be Updated.
 
         """
+
         # cast sInds to array
-        sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
+        sInds = np.array(sInds, ndmin=1)
 
-        if (C_b is None) or (C_sp is None):
-            _, C_b, C_sp = self.Cp_Cb_Csp(
-                TL, sInds, fZ, JEZ, np.zeros(len(sInds)), WA, mode, TK=TK
-            )
+        # Return NaNs if user requests analytic_only (not supported here)
+        if analytic_only:
+            return np.full(len(sInds), np.nan)
 
-        C_p = mode["SNR"] * np.sqrt(C_sp**2 + C_b / intTimes)  # planet count rate
-        core_thruput = mode["syst"]["core_thruput"](mode["lam"], WA)
-        flux_star = TL.starFlux(sInds, mode)
+        # Initialize result array
+        dMags = np.zeros(len(sInds))
+        messages = []
+        successes = []
 
-        dMag = -2.5 * np.log10(C_p / (flux_star * mode["losses"] * core_thruput))
+        for i, int_time in enumerate(tqdm(intTimes, delay=2)):
+            if int_time == 0:
+                warnings.warn("calc_dMag_per_intTime received intTime=0, returning nan.")
+                dMags[i] = np.nan
+                continue
 
-        return dMag.value
+            if np.isnan(int_time):
+                warnings.warn("calc_dMag_per_intTime receive intTime = Nan, returning nan.")
+                dMags[i] = np.nan
+                continue
+
+            if (WA[i] > mode["OWA"]) or (WA[i] < mode["IWA"]):
+                warnings.warn("WA outside [IWA, OWA], returning nan.")
+                dMags[i] = np.nan
+                continue
+
+            s = [sInds[i]]
+            args_denom = (TL, s, fZ[i].ravel(), JEZ[i].ravel(), WA[i].ravel(), mode, TK)
+            args_intTime = (*args_denom, int_time.ravel())
+
+            
+            # Find the singularity dMag (limit as intTime approaches x) 
+            if mode["syst"]["occulter"]:
+                singularity_dMag = np.inf
+            else:
+                try:
+                    f_a = self.int_time_denom_obj(10, *args_denom)
+                    f_b = self.int_time_denom_obj(30, *args_denom)
+
+                    if f_a * f_b > 0:
+                        warnings.warn("No root found in bracket [10, 30], returning nan.")
+                        singularity_dMag = np.inf
+                        dMags[i] = np.nan
+                        continue
+
+                    singularity_res = root_scalar(
+                        self.int_time_denom_obj,
+                        args=args_denom,
+                        bracket=[10, 30],
+                        method="brentq",
+                    )
+                    singularity_dMag = singularity_res.root
+
+                except Exception as e:
+                    warnings.warn(f"Root finding failed: {e}, returning nan.")
+                    singularity_dMag = np.inf
+                    dMags[i] = np.nan
+                    continue
+
+            # If infinite intTime, return singularity value 
+            if int_time == np.inf:
+                dMag = singularity_dMag
+
+            else:
+            # Minimize time error between predicted and desired intTime 
+                star_vmag = TL.Vmag[sInds[i]]
+                test_lb_subtractions = [2, 10]
+                converged = False
+                message = None
+                success = False
+
+                for lb_subtraction in test_lb_subtractions:
+                    initial_lower_bound = np.clip(
+                        singularity_dMag - lb_subtraction - star_vmag,
+                        0.1,
+                        singularity_dMag - 0.01,
+                    )
+
+                    lb_adjustment = 0
+                    max_adjustement = 10
+                    while not converged and lb_adjustment < max_adjustement:
+                        dMag_lb = initial_lower_bound + lb_adjustment
+
+                        if dMag_lb >= singularity_dMag:
+                            break  # try next lb_subtraction
+
+                        tmp = np.linspace(
+                            dMag_lb,
+                            singularity_dMag - 1e-6,
+                            10,
+                        )
+                        tmp2 = (
+                            self.calc_intTime(
+                                TL,
+                                s * len(tmp),
+                                args_denom[2],
+                                args_denom[3],
+                                tmp,
+                                args_denom[4],
+                                mode,
+                                TK,
+                            )
+                            - int_time
+                        )
+
+                        dsigns = np.diff(np.sign(tmp2))
+                        if not (np.any(dsigns == 2)):
+                            break
+                        ind = np.where(dsigns == 2)[0][0]
+                        bounds = tmp[ind : ind + 2]
+                        dMag_init = np.mean(bounds)
+
+                        try:
+                            dMag_min_res = minimize(
+                                self.dMag_per_intTime_obj,
+                                x0=np.array([dMag_init]),
+                                args=args_intTime,
+                                bounds=[(dMag_lb, singularity_dMag)],
+                                method="L-BFGS-B",
+                                tol=1e-10,
+                            )
+                        except Exception:
+                            break
+
+                        dMag = dMag_min_res["x"][0] if isinstance(dMag_min_res["x"], np.ndarray) else dMag_min_res["x"]
+                        time_diff = dMag_min_res["fun"]
+
+                        # status check
+
+                        message = dMag_min_res.get("message", None)
+                        success = dMag_min_res.get("success", False)
+
+                        if (
+                            np.isnan(time_diff) or (time_diff > int_time.to(u.day).value / 20) or (np.abs(dMag - dMag_lb) < 0.01)
+                        ):
+                            lb_adjustment += 0.5
+                        else:
+                            converged = True
+
+                    if converged:
+                        break
+
+                if not converged:
+                    dMag = np.nan
+
+            dMags[i] = dMag
+            messages.append(message)
+            successes.append(success)
+
+        return dMags
