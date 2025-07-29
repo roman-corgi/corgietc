@@ -25,10 +25,15 @@ class corgietc(Nemati):
         Rlam=-1.513136232,
         Rconst=707.8977209,
         pp_Factor_CBE=2.0,
+        desiredRate=0.1,  # e-/pix/frame
+        tfmin=3,  # seconds
+        tfmax=100,  # seconds
+        frameThresh=0.4,  # seconds
+        forcePhotonCounting=False,
         **specs,
     ):
 
-        # useful conversion factorс
+        # useful conversion factors
         self.radas = ((1 * u.arcsec).to(u.rad)).value
         self.hc = (const.h * const.c).to_value(u.m**3 * u.kg / u.s**2)
 
@@ -41,6 +46,13 @@ class corgietc(Nemati):
             self.SPECTRA_Data.df.at[2, "Wavelength_m"]
             - self.SPECTRA_Data.df.at[1, "Wavelength_m"]
         )
+
+        # set frame threshold values
+        self.tfmin = tfmin
+        self.tfmax = tfmax
+        self.desiredRate = desiredRate
+        self.frameThresh = frameThresh
+        self.forcePhotonCounting = forcePhotonCounting
 
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
@@ -60,6 +72,15 @@ class corgietc(Nemati):
         # add local defaults to outspec
         for k in self.default_vals_extra2:
             self._outspec[k] = self.default_vals_extra2[k]
+
+        for k in [
+            "desiredRate",
+            "tfmin",
+            "tfmax",
+            "frameThresh",
+            "forcePhotonCounting",
+        ]:
+            self._outspec[k] = getattr(self, k)
 
     def populate_starlightSuppressionSystems_extra(self):
 
@@ -348,6 +369,14 @@ class corgietc(Nemati):
         syst = mode["syst"]
         inst = mode["inst"]
         lam_m = mode["lam"].to_value(u.m)
+        QE_img = (
+            inst["DET_QE_Data"]
+            .df.loc[
+                inst["DET_QE_Data"].df["lambda_nm"] <= mode["lam"].to_value(u.nm),
+                "QE_at_neg100degC",
+            ]
+            .iloc[-1]
+        )
 
         # set default degredation time if TimeKeeping object not provided
         if TK is None:
@@ -366,6 +395,19 @@ class corgietc(Nemati):
         C_p = np.zeros(len(sInds))
         C_b = np.zeros(len(sInds))
         C_sp = np.zeros(len(sInds))
+        if returnExtra:
+            extra = {
+                "dQE": np.zeros(len(sInds)),
+                "mpix": np.zeros(len(sInds)),
+                "throughput_rates": np.zeros(len(sInds), dtype=object),
+                "cphrate": np.zeros(len(sInds), dtype=object),
+                "ENF": np.zeros(len(sInds)),
+                "effReadnoise": np.zeros(len(sInds)),
+                "frameTime": np.zeros(len(sInds)),
+                "QE_img": np.zeros(len(sInds)),
+                "nvRatesCore": np.zeros(len(sInds), dtype=object),
+                "detNoiseRate": np.zeros(len(sInds), dtype=object),
+            }
 
         # loop through all values
         for jj, ss in enumerate(sInds):
@@ -462,11 +504,31 @@ class corgietc(Nemati):
                 ]
             )
 
+            # pre-compute frame time
+            if self.forcePhotonCounting:
+                photonCounting = True
+            else:
+                frameTime = round(
+                    min(
+                        self.tfmax,
+                        max(
+                            self.tfmin,
+                            self.desiredRate / (cphrate.total * QE_img / mpix),
+                        ),
+                    ),
+                    1,
+                )
+                approxPerPixelPerFrame = frameTime * cphrate.total * QE_img / mpix
+                if approxPerPixelPerFrame <= self.frameThresh:
+                    photonCounting = True
+                else:
+                    photonCounting = False
+
             ENF, effReadnoise, frameTime, dQE, QE_img = fl.compute_frame_time_and_dqe(
-                0.1,
-                3,
-                100,
-                True,
+                self.desiredRate,
+                self.tfmin,
+                self.tfmax,
+                photonCounting,
                 inst["DET_QE_Data"],
                 inst["DET_CBE_Data"],
                 lam_m,
@@ -516,7 +578,21 @@ class corgietc(Nemati):
             C_b[jj] = nvRatesCore.total
             C_sp[jj] = residSpecSdevRate
 
+            if returnExtra:
+                extra["dQE"][jj] = dQE
+                extra["frameTime"][jj] = frameTime
+                extra["mpix"][jj] = mpix
+                extra["throughput_rates"][jj] = throughput_rates
+                extra["cphrate"][jj] = cphrate
+                extra["ENF"][jj] = ENF
+                extra["effReadnoise"][jj] = effReadnoise
+                extra["QE_img"][jj] = QE_img
+                extra["nvRatesCore"][jj] = nvRatesCore
+                extra["detNoiseRate"][jj] = detNoiseRate
+
             # end loop through values
+        if returnExtra:
+            return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
