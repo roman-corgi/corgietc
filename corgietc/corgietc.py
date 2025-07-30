@@ -56,7 +56,7 @@ class corgietc(Nemati):
             Threshold value at which to switch from photon counting to analog mode in
             e-/pix/frame.  If the approximated value is above the threshold, analog mode
             is used in calculating frame time and effective QE.  Ignored if
-            forcePhotonCounting is set to True. Defaults to 0.4
+            forcePhotonCounting is set to True. Defaults to 0.5
         forcePhotonCounting (float)
             If True, always use photon counting mode regardless of frame counts.
             Defaults to False
@@ -104,7 +104,7 @@ class corgietc(Nemati):
         desiredRate=0.1,
         tfmin=3,
         tfmax=100,
-        frameThresh=0.4,
+        frameThresh=0.5,
         forcePhotonCounting=False,
         **specs,
     ):
@@ -483,6 +483,7 @@ class corgietc(Nemati):
                 "QE_img": np.zeros(len(sInds)),
                 "nvRatesCore": np.zeros(len(sInds), dtype=object),
                 "detNoiseRate": np.zeros(len(sInds), dtype=object),
+                "photonCounting": np.zeros(len(sInds), dtype=bool),
             }
 
         # loop through all values
@@ -491,6 +492,13 @@ class corgietc(Nemati):
                 planetWA = WA[0]
             else:
                 planetWA = WA[jj]
+
+            # check for out of bounds WA
+            if (planetWA < mode["IWA"]) or (planetWA > mode["OWA"]):
+                C_p[jj] = 0
+                C_b[jj] = 0
+                C_sp[jj] = 0
+                continue
 
             if isinstance(dMag, (int, float)):
                 dMagi = dMag
@@ -665,6 +673,7 @@ class corgietc(Nemati):
                 extra["QE_img"][jj] = QE_img
                 extra["nvRatesCore"][jj] = nvRatesCore
                 extra["detNoiseRate"][jj] = detNoiseRate
+                extra["photonCounting"][jj] = photonCounting
 
             # end loop through values
         if returnExtra:
