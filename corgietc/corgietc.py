@@ -14,6 +14,82 @@ import scipy.interpolate
 
 
 class corgietc(Nemati):
+    r"""corgietc Optical System class
+
+    Optical System Module based on cgi_noise model.
+
+    Args:
+        CritLam (float)
+            Default critical wavelength (Nyquist sampling) in nm. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 500
+        compbeamD (float)
+            Default compressed beam diameter in m. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.005
+        fnlFocLen (float)
+            Default final focal length in m. Only used if not set in scienceInstrument
+            input specification definition. Defaults to 0.26
+        PSF_x_lamD (float)
+            Default PSF core x extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.942
+        PSF_y_lamD (float)
+            Default PSF core y extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition.  Defaults to 0.45
+        Rlamsq (float)
+            Quadratic term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.000854964
+        Rlam (float)
+            Linear term of resolving power at PSF model. Only used if not set in
+            scienceInstrument input specification definition. Defaults to -1.513136232
+        Rconst (float)
+            Constant term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 707.8977209
+        pp_Factor_CBE (float)
+            Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
+            not set in scienceInstrument input specification definition. Defaults to 2.0
+        desiredRate (float)
+            Target value for e-/pix/frame. Defaults to 0.1
+        tfmin (float)
+            Minimum frame time in seconds. Defaults to 3
+        tfmax (float)
+            Maximum frame time in seconds. Defaults to 100
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True. Defaults to 0.4
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+            Defaults to False
+        **specs:
+            EXOSIMS input specification dictionary
+
+    Attributes:
+        default_vals_extra2 (dict):
+            Dictionary of local default values.
+        desiredRate (float)
+            Target value for e-/pix/frame.
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True.
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+        hc (float):
+            h * c in m^3 kg s^-2
+        radas (float):
+            Conversion factor from arcsec to radians
+        SPECTRA_Data (cgi_noise.loadCSVrow.loadCSVrow):
+            Spectral data for reference stars
+        SPECTRA_deltaLambda (float):
+            Wavelength step (in m) of SPECTRA_Data
+        tfmin (float)
+            Minimum frame time in seconds.
+        tfmax (float)
+            Maximum frame time in seconds.
+
+    """
+
     def __init__(
         self,
         CritLam=500,
@@ -25,10 +101,10 @@ class corgietc(Nemati):
         Rlam=-1.513136232,
         Rconst=707.8977209,
         pp_Factor_CBE=2.0,
-        desiredRate=0.1,  # e-/pix/frame
-        tfmin=3,  # seconds
-        tfmax=100,  # seconds
-        frameThresh=0.4,  # seconds
+        desiredRate=0.1,
+        tfmin=3,
+        tfmax=100,
+        frameThresh=0.4,
         forcePhotonCounting=False,
         **specs,
     ):
