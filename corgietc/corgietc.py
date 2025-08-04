@@ -16,6 +16,82 @@ from scipy.optimize import minimize, root_scalar
 
 
 class corgietc(Nemati):
+    r"""corgietc Optical System class
+
+    Optical System Module based on cgi_noise model.
+
+    Args:
+        CritLam (float)
+            Default critical wavelength (Nyquist sampling) in nm. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 500
+        compbeamD (float)
+            Default compressed beam diameter in m. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.005
+        fnlFocLen (float)
+            Default final focal length in m. Only used if not set in scienceInstrument
+            input specification definition. Defaults to 0.26
+        PSF_x_lamD (float)
+            Default PSF core x extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.942
+        PSF_y_lamD (float)
+            Default PSF core y extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition.  Defaults to 0.45
+        Rlamsq (float)
+            Quadratic term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.000854964
+        Rlam (float)
+            Linear term of resolving power at PSF model. Only used if not set in
+            scienceInstrument input specification definition. Defaults to -1.513136232
+        Rconst (float)
+            Constant term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 707.8977209
+        pp_Factor_CBE (float)
+            Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
+            not set in scienceInstrument input specification definition. Defaults to 2.0
+        desiredRate (float)
+            Target value for e-/pix/frame. Defaults to 0.1
+        tfmin (float)
+            Minimum frame time in seconds. Defaults to 3
+        tfmax (float)
+            Maximum frame time in seconds. Defaults to 100
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True. Defaults to 0.5
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+            Defaults to False
+        **specs:
+            EXOSIMS input specification dictionary
+
+    Attributes:
+        default_vals_extra2 (dict):
+            Dictionary of local default values.
+        desiredRate (float)
+            Target value for e-/pix/frame.
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True.
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+        hc (float):
+            h * c in m^3 kg s^-2
+        radas (float):
+            Conversion factor from arcsec to radians
+        SPECTRA_Data (cgi_noise.loadCSVrow.loadCSVrow):
+            Spectral data for reference stars
+        SPECTRA_deltaLambda (float):
+            Wavelength step (in m) of SPECTRA_Data
+        tfmin (float)
+            Minimum frame time in seconds.
+        tfmax (float)
+            Maximum frame time in seconds.
+
+    """
+
     def __init__(
         self,
         CritLam=500,
@@ -27,10 +103,15 @@ class corgietc(Nemati):
         Rlam=-1.513136232,
         Rconst=707.8977209,
         pp_Factor_CBE=2.0,
+        desiredRate=0.1,
+        tfmin=3,
+        tfmax=100,
+        frameThresh=0.5,
+        forcePhotonCounting=False,
         **specs,
     ):
 
-        # useful conversion factorс
+        # useful conversion factors
         self.radas = ((1 * u.arcsec).to(u.rad)).value
         self.hc = (const.h * const.c).to_value(u.m**3 * u.kg / u.s**2)
 
@@ -43,6 +124,13 @@ class corgietc(Nemati):
             self.SPECTRA_Data.df.at[2, "Wavelength_m"]
             - self.SPECTRA_Data.df.at[1, "Wavelength_m"]
         )
+
+        # set frame threshold values
+        self.tfmin = tfmin
+        self.tfmax = tfmax
+        self.desiredRate = desiredRate
+        self.frameThresh = frameThresh
+        self.forcePhotonCounting = forcePhotonCounting
 
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
@@ -62,6 +150,15 @@ class corgietc(Nemati):
         # add local defaults to outspec
         for k in self.default_vals_extra2:
             self._outspec[k] = self.default_vals_extra2[k]
+
+        for k in [
+            "desiredRate",
+            "tfmin",
+            "tfmax",
+            "frameThresh",
+            "forcePhotonCounting",
+        ]:
+            self._outspec[k] = getattr(self, k)
 
     def populate_starlightSuppressionSystems_extra(self):
 
@@ -350,6 +447,14 @@ class corgietc(Nemati):
         syst = mode["syst"]
         inst = mode["inst"]
         lam_m = mode["lam"].to_value(u.m)
+        QE_img = (
+            inst["DET_QE_Data"]
+            .df.loc[
+                inst["DET_QE_Data"].df["lambda_nm"] <= mode["lam"].to_value(u.nm),
+                "QE_at_neg100degC",
+            ]
+            .iloc[-1]
+        )
 
         # set default degredation time if TimeKeeping object not provided
         if TK is None:
@@ -368,6 +473,20 @@ class corgietc(Nemati):
         C_p = np.zeros(len(sInds))
         C_b = np.zeros(len(sInds))
         C_sp = np.zeros(len(sInds))
+        if returnExtra:
+            extra = {
+                "dQE": np.zeros(len(sInds)),
+                "mpix": np.zeros(len(sInds)),
+                "throughput_rates": np.zeros(len(sInds), dtype=object),
+                "cphrate": np.zeros(len(sInds), dtype=object),
+                "ENF": np.zeros(len(sInds)),
+                "effReadnoise": np.zeros(len(sInds)),
+                "frameTime": np.zeros(len(sInds)),
+                "QE_img": np.zeros(len(sInds)),
+                "nvRatesCore": np.zeros(len(sInds), dtype=object),
+                "detNoiseRate": np.zeros(len(sInds), dtype=object),
+                "photonCounting": np.zeros(len(sInds), dtype=bool),
+            }
 
         # loop through all values
         for jj, ss in enumerate(sInds):
@@ -375,6 +494,13 @@ class corgietc(Nemati):
                 planetWA = WA[0]
             else:
                 planetWA = WA[jj]
+
+            # check for out of bounds WA
+            if (planetWA < mode["IWA"]) or (planetWA > mode["OWA"]):
+                C_p[jj] = 0
+                C_b[jj] = 0
+                C_sp[jj] = 0
+                continue
 
             if isinstance(dMag, (int, float)):
                 dMagi = dMag
@@ -464,11 +590,31 @@ class corgietc(Nemati):
                 ]
             )
 
+            # pre-compute frame time
+            if self.forcePhotonCounting:
+                photonCounting = True
+            else:
+                frameTime = round(
+                    min(
+                        self.tfmax,
+                        max(
+                            self.tfmin,
+                            self.desiredRate / (cphrate.total * QE_img / mpix),
+                        ),
+                    ),
+                    1,
+                )
+                approxPerPixelPerFrame = frameTime * cphrate.total * QE_img / mpix
+                if approxPerPixelPerFrame <= self.frameThresh:
+                    photonCounting = True
+                else:
+                    photonCounting = False
+
             ENF, effReadnoise, frameTime, dQE, QE_img = fl.compute_frame_time_and_dqe(
-                0.1,
-                3,
-                100,
-                True,
+                self.desiredRate,
+                self.tfmin,
+                self.tfmax,
+                photonCounting,
                 inst["DET_QE_Data"],
                 inst["DET_CBE_Data"],
                 lam_m,
@@ -518,7 +664,22 @@ class corgietc(Nemati):
             C_b[jj] = nvRatesCore.total
             C_sp[jj] = residSpecSdevRate
 
+            if returnExtra:
+                extra["dQE"][jj] = dQE
+                extra["frameTime"][jj] = frameTime
+                extra["mpix"][jj] = mpix
+                extra["throughput_rates"][jj] = throughput_rates
+                extra["cphrate"][jj] = cphrate
+                extra["ENF"][jj] = ENF
+                extra["effReadnoise"][jj] = effReadnoise
+                extra["QE_img"][jj] = QE_img
+                extra["nvRatesCore"][jj] = nvRatesCore
+                extra["detNoiseRate"][jj] = detNoiseRate
+                extra["photonCounting"][jj] = photonCounting
+
             # end loop through values
+        if returnExtra:
+            return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
