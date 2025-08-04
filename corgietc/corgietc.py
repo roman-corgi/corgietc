@@ -632,8 +632,8 @@ class corgietc(Nemati):
                 mode["inBandFlux0_sum"],
                 starFlux,
                 TimeonRefStar_tRef_per_tTar,
-                "a0v",
-                2.26,
+                mode["RefStar_SpectralType"],
+                mode["RefStar_V_mag_CBE"],
             )
             k_sp = rdi_penalty["k_sp"]
             k_det = rdi_penalty["k_det"]
