@@ -4,7 +4,9 @@ import warnings
 import astropy.units as u
 import numpy as np
 from pathlib import Path
+import pandas as pd
 
+import csv
 from EXOSIMS.OpticalSystem.Nemati import Nemati
 from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
@@ -48,6 +50,10 @@ class corgietc(Nemati):
         pp_Factor_CBE (float)
             Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
             not set in scienceInstrument input specification definition. Defaults to 2.0
+        RefStar_SpectralType (str)
+            Spectral type of the reference star (eg a0v, b3v, a5v, f5v, g0v, g5v, k0v, k5v, m0v, m5v)
+        RefStar_V_mag_CBE (float)
+            Visual Magnitude of the reference star
         desiredRate (float)
             Target value for e-/pix/frame. Defaults to 0.1
         tfmin (float)
@@ -108,7 +114,11 @@ class corgietc(Nemati):
         tfmax=100,
         frameThresh=0.5,
         forcePhotonCounting=False,
+        RefStar_SpectralType='a0v', 
+        RefStar_V_mag_CBE=22.6,
         **specs,
+        
+        
     ):
 
         # useful conversion factors
@@ -132,6 +142,12 @@ class corgietc(Nemati):
         self.frameThresh = frameThresh
         self.forcePhotonCounting = forcePhotonCounting
 
+        with open("SPECTRA_ALL_BPGS.csv", newline='', encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+
+        assert RefStar_SpectralType in header, f"{RefStar_SpectralType} is not found in the columns of SPECTRA_ALL_BPGS.csv"
+
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
             "CritLam": CritLam,
@@ -143,6 +159,8 @@ class corgietc(Nemati):
             "Rlam": Rlam,
             "Rconst": Rconst,
             "pp_Factor_CBE": pp_Factor_CBE,
+            "RefStar_SpectralType": RefStar_SpectralType,
+            "RefStar_V_mag_CBE": RefStar_V_mag_CBE,
         }
 
         Nemati.__init__(self, **specs)
@@ -285,6 +303,8 @@ class corgietc(Nemati):
         self.allowed_observingMode_kws.append("Scenario")
         self.allowed_observingMode_kws.append("StrayLight_Data")
         self.allowed_observingMode_kws.append("pp_Factor_CBE")
+        self.allowed_observingMode_kws.append("RefStar_SpectralType")
+        self.allowed_observingMode_kws.append("RefStar_V_mag_CBE")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -352,6 +372,12 @@ class corgietc(Nemati):
             # ensure pp_Factor_CBE is in the mode
             mode["pp_Factor_CBE"] = mode.get(
                 "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
+            )
+            mode["RefStar_SpectralType"] = mode.get(
+                "RefStar_SpectralType", self.default_vals_extra2["RefStar_SpectralType"]
+            )
+            mode["RefStar_V_mag_CBE"] = mode.get(
+                "RefStar_V_mag_CBE", self.default_vals_extra2["RefStar_V_mag_CBE"]
             )
 
     def construct_cg(self, mode, WA):
@@ -633,7 +659,7 @@ class corgietc(Nemati):
                 starFlux,
                 TimeonRefStar_tRef_per_tTar,
                 mode["RefStar_SpectralType"],
-                mode["RefStar_V_mag_CBE"],
+                mode["RefStar_V_mag_CBE"]
             )
             k_sp = rdi_penalty["k_sp"]
             k_det = rdi_penalty["k_det"]
