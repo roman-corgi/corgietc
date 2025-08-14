@@ -1,18 +1,18 @@
 import os
 import warnings
-
-import astropy.units as u
-import numpy as np
 from pathlib import Path
 
+import astropy.units as u
+import astropy.constants as const
+import numpy as np
+import scipy.interpolate
+from scipy.optimize import minimize, root_scalar
+from tqdm import tqdm
+
 from EXOSIMS.OpticalSystem.Nemati import Nemati
+from EXOSIMS.util._numpy_compat import copy_if_needed
 from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
-from EXOSIMS.util._numpy_compat import copy_if_needed
-import astropy.constants as const
-import scipy.interpolate
-from tqdm import tqdm
-from scipy.optimize import minimize, root_scalar
 
 
 class corgietc(Nemati):
@@ -696,7 +696,6 @@ class corgietc(Nemati):
         C_sp=None,
         TK=None,
         analytic_only=False,
-        debug = False,
     ):
         """Finds achievable planet delta magnitude for one integration
         time per star in the input list at one working angle.
@@ -732,14 +731,10 @@ class corgietc(Nemati):
             numpy.ndarray(float):
                 Achievable dMag for given integration time and working angle
 
-        .. warning::
-
-            Temporary. To be Updated.
-
         """
 
         # cast sInds to array
-        sInds = np.array(sInds, ndmin=1)
+        sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
 
         # Return NaNs if user requests analytic_only (not supported here)
         if analytic_only:
@@ -748,16 +743,19 @@ class corgietc(Nemati):
         # Initialize result array
         dMags = np.zeros(len(sInds))
         messages = []
-        successes = []
 
         for i, int_time in enumerate(tqdm(intTimes, delay=2)):
             if int_time == 0:
-                warnings.warn("calc_dMag_per_intTime received intTime=0, returning nan.")
+                warnings.warn(
+                    "calc_dMag_per_intTime received intTime=0, returning nan."
+                )
                 dMags[i] = np.nan
                 continue
 
             if np.isnan(int_time):
-                warnings.warn("calc_dMag_per_intTime receive intTime = Nan, returning nan.")
+                warnings.warn(
+                    "calc_dMag_per_intTime receive intTime = Nan, returning nan."
+                )
                 dMags[i] = np.nan
                 continue
 
@@ -770,8 +768,7 @@ class corgietc(Nemati):
             args_denom = (TL, s, fZ[i].ravel(), JEZ[i].ravel(), WA[i].ravel(), mode, TK)
             args_intTime = (*args_denom, int_time.ravel())
 
-            
-            # Find the singularity dMag (limit as intTime approaches x) 
+            # Find the singularity dMag (limit as intTime approaches x)
             if mode["syst"]["occulter"]:
                 singularity_dMag = np.inf
             else:
@@ -780,7 +777,9 @@ class corgietc(Nemati):
                     f_b = self.int_time_denom_obj(30, *args_denom)
 
                     if f_a * f_b > 0:
-                        warnings.warn("No root found in bracket [10, 30], returning nan.")
+                        warnings.warn(
+                            "No root found in bracket [10, 30], returning nan."
+                        )
                         singularity_dMag = np.inf
                         dMags[i] = np.nan
                         continue
@@ -799,12 +798,12 @@ class corgietc(Nemati):
                     dMags[i] = np.nan
                     continue
 
-            # If infinite intTime, return singularity value 
+            # If infinite intTime, return singularity value
             if int_time == np.inf:
                 dMag = singularity_dMag
 
             else:
-            # Minimize time error between predicted and desired intTime 
+                # Minimize time error between predicted and desired intTime
                 star_vmag = TL.Vmag[sInds[i]]
                 test_lb_subtractions = [2, 10]
                 converged = False
@@ -826,6 +825,7 @@ class corgietc(Nemati):
                         if dMag_lb >= singularity_dMag:
                             break  # try next lb_subtraction
 
+                        # do coarse line search over region
                         tmp = np.linspace(
                             dMag_lb,
                             singularity_dMag - 1e-6,
@@ -845,9 +845,10 @@ class corgietc(Nemati):
                             - int_time
                         )
 
+                        # look for sign flip
                         dsigns = np.diff(np.sign(tmp2))
                         if not (np.any(dsigns == 2)):
-                            break
+                            break  # try next iteration
                         ind = np.where(dsigns == 2)[0][0]
                         bounds = tmp[ind : ind + 2]
                         dMag_init = np.mean(bounds)
@@ -857,14 +858,18 @@ class corgietc(Nemati):
                                 self.dMag_per_intTime_obj,
                                 x0=np.array([dMag_init]),
                                 args=args_intTime,
-                                bounds=[(dMag_lb, singularity_dMag)],
+                                bounds=[bounds],
                                 method="L-BFGS-B",
-                                tol=1e-10,
+                                tol=1e-6,
                             )
                         except Exception:
                             break
 
-                        dMag = dMag_min_res["x"][0] if isinstance(dMag_min_res["x"], np.ndarray) else dMag_min_res["x"]
+                        dMag = (
+                            dMag_min_res["x"][0]
+                            if isinstance(dMag_min_res["x"], np.ndarray)
+                            else dMag_min_res["x"]
+                        )
                         time_diff = dMag_min_res["fun"]
 
                         # status check
@@ -872,8 +877,10 @@ class corgietc(Nemati):
                         message = dMag_min_res.get("message", None)
                         success = dMag_min_res.get("success", False)
 
-                        if (
-                            np.isnan(time_diff) or (time_diff > int_time.to(u.day).value / 20) or (np.abs(dMag - dMag_lb) < 0.01)
+                        if not (success) or (
+                            np.isnan(time_diff)
+                            or (time_diff > int_time.to(u.day).value / 20)
+                            or (np.abs(dMag - dMag_lb) < 0.01)
                         ):
                             lb_adjustment += 0.5
                         else:
@@ -887,6 +894,5 @@ class corgietc(Nemati):
 
             dMags[i] = dMag
             messages.append(message)
-            successes.append(success)
 
         return dMags
