@@ -696,6 +696,7 @@ class corgietc(Nemati):
         C_sp=None,
         TK=None,
         analytic_only=False,
+        singularity_dMags=None,
     ):
         """Finds achievable planet delta magnitude for one integration
         time per star in the input list at one working angle.
@@ -726,6 +727,10 @@ class corgietc(Nemati):
             analytic_only (bool):
                 If True, return the analytic solution for dMag. Not used by the
                 Prototype OpticalSystem.
+            singularity_dMags (~numpy.ndarray(float), optional):
+                Largest attainable delta Mag values.  If None (default) these are
+                computed at runtime.
+
 
         Returns:
             numpy.ndarray(float):
@@ -744,7 +749,7 @@ class corgietc(Nemati):
         dMags = np.zeros(len(sInds))
         messages = []
 
-        for i, int_time in enumerate(tqdm(intTimes, delay=2)):
+        for i, int_time in enumerate(tqdm(intTimes, desc="Computing dMags", delay=2)):
             if int_time == 0:
                 warnings.warn(
                     "calc_dMag_per_intTime received intTime=0, returning nan."
@@ -768,40 +773,42 @@ class corgietc(Nemati):
             args_denom = (TL, s, fZ[i].ravel(), JEZ[i].ravel(), WA[i].ravel(), mode, TK)
             args_intTime = (*args_denom, int_time.ravel())
 
-            # Find the singularity dMag (limit as intTime approaches x)
-            if mode["syst"]["occulter"]:
-                singularity_dMag = np.inf
-            else:
-                try:
-                    f_a = self.int_time_denom_obj(10, *args_denom)
-                    f_b = self.int_time_denom_obj(30, *args_denom)
+            # Find the singularity dMag (limit as intTime approaches infinity)
+            if singularity_dMags is None:
+                if mode["syst"]["occulter"]:
+                    singularity_dMag = np.inf
+                else:
+                    try:
+                        f_a = self.int_time_denom_obj(10, *args_denom)
+                        f_b = self.int_time_denom_obj(30, *args_denom)
 
-                    if f_a * f_b > 0:
-                        warnings.warn(
-                            "No root found in bracket [10, 30], returning nan."
+                        if f_a * f_b > 0:
+                            warnings.warn(
+                                "No root found in bracket [10, 30], returning nan."
+                            )
+                            singularity_dMag = np.inf
+                            dMags[i] = np.nan
+                            continue
+
+                        singularity_res = root_scalar(
+                            self.int_time_denom_obj,
+                            args=args_denom,
+                            bracket=[10, 30],
+                            method="brentq",
                         )
+                        singularity_dMag = singularity_res.root
+
+                    except Exception as e:
+                        warnings.warn(f"Root finding failed: {e}, returning nan.")
                         singularity_dMag = np.inf
                         dMags[i] = np.nan
                         continue
-
-                    singularity_res = root_scalar(
-                        self.int_time_denom_obj,
-                        args=args_denom,
-                        bracket=[10, 30],
-                        method="brentq",
-                    )
-                    singularity_dMag = singularity_res.root
-
-                except Exception as e:
-                    warnings.warn(f"Root finding failed: {e}, returning nan.")
-                    singularity_dMag = np.inf
-                    dMags[i] = np.nan
-                    continue
+            else:
+                singularity_dMag = singularity_dMags[i]
 
             # If infinite intTime, return singularity value
             if int_time == np.inf:
                 dMag = singularity_dMag
-
             else:
                 # Minimize time error between predicted and desired intTime
                 star_vmag = TL.Vmag[sInds[i]]
