@@ -1,5 +1,5 @@
 import unittest
-import corgietc
+import corgietc  # noqa
 import os
 import json
 import copy
@@ -105,21 +105,23 @@ class test_corgietc(unittest.TestCase):
             intTimes1 = OS.calc_intTime(TL, sInds, fZ, JEZ, dMags1, WAs, mode)
             self.assertTrue(
                 not np.any(np.isnan(intTimes1)),
-                msg=f"NaN integration time computed for {mode["Scenario"]}",
+                msg=f"NaN integration time computed for {mode['Scenario']}",
             )
 
             # dMags from intTime1
-            dMags2 = OS.calc_dMag_per_intTime(intTimes1, TL, sInds, fZ, JEZ, WAs, mode)
+            dMags2 = OS.calc_dMag_per_intTime(
+                intTimes1, TL, sInds, fZ, JEZ, WAs, mode, singularity_dMags=sat_dMags
+            )
             self.assertTrue(
                 not np.any(np.isnan(dMags2)),
-                msg=f"NaN Delta mag computed for {mode["Scenario"]}",
+                msg=f"NaN Delta mag computed for {mode['Scenario']}",
             )
 
             # integration times from dMags2
             intTimes2 = OS.calc_intTime(TL, sInds, fZ, JEZ, dMags2, WAs, mode)
             self.assertTrue(
                 not np.any(np.isnan(intTimes2)),
-                msg=f"NaN integration time computed for {mode["Scenario"]}",
+                msg=f"NaN integration time computed for {mode['Scenario']}",
             )
 
             # compute errors
