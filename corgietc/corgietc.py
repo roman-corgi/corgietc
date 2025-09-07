@@ -747,7 +747,6 @@ class corgietc(Nemati):
 
         # Initialize result array
         dMags = np.zeros(len(sInds))
-        messages = []
 
         for i, int_time in enumerate(tqdm(intTimes, desc="Computing dMags", delay=2)):
             if int_time == 0:
@@ -806,100 +805,172 @@ class corgietc(Nemati):
             else:
                 singularity_dMag = singularity_dMags[i]
 
-            # If infinite intTime, return singularity value
+            # If infinite intTime, return singularity value and move on
             if int_time == np.inf:
-                dMag = singularity_dMag
-            else:
-                # Minimize time error between predicted and desired intTime
-                star_vmag = TL.Vmag[sInds[i]]
-                test_lb_subtractions = [2, 10]
-                converged = False
-                message = None
-                success = False
+                dMags[i] = singularity_dMag
+                continue
 
-                for lb_subtraction in test_lb_subtractions:
-                    initial_lower_bound = np.clip(
-                        singularity_dMag - lb_subtraction - star_vmag,
-                        0.1,
-                        singularity_dMag - 0.01,
+            # Alternatively, we need to minimize time error between predicted and
+            # desired intTime
+
+            # First we need to establish bounds
+            # Initial upper bound is 1e-6 under the singularity dMag
+            # Initial lower bound is 5 magnitudes below that
+            bounds = singularity_dMag - np.array([5, 1e-6])
+            # compute integration time deltas for initial bounds and ensure that there's
+            # a sign flip
+            lbtime, ubtime = (
+                self.calc_intTime(
+                    TL,
+                    s * 2,
+                    args_denom[2],
+                    args_denom[3],
+                    bounds,
+                    args_denom[4],
+                    mode,
+                    TK,
+                )
+                - int_time
+            )
+
+            # if the top bound produces a shorter shorter integration time, then we
+            # can safely return the saturation dMag
+            if np.sign(ubtime) != 1:
+                dMags[i] = singularity_dMag
+                continue
+
+            # the lower bound should produce an integration time below the requested
+            # time. if not, need to lower the bound until we find it. but once we do,
+            # that's our bounding box right there
+            if np.sign(lbtime) != -1:
+                while (np.sign(lbtime) != -1) and (bounds[0] >= -1):
+                    bounds[0] -= 1
+                    lbtime = (
+                        self.calc_intTime(
+                            TL,
+                            s,
+                            args_denom[2],
+                            args_denom[3],
+                            bounds[0],
+                            args_denom[4],
+                            mode,
+                            TK,
+                        )[0]
+                        - int_time
                     )
 
-                    lb_adjustment = 0
-                    max_adjustement = 10
-                    while not converged and lb_adjustment < max_adjustement:
-                        dMag_lb = initial_lower_bound + lb_adjustment
+                # if loop terminates without finding solution, we're probably dealing
+                # with an inversion in the curve and will need to do a finer search
+                if np.sign(lbtime) != -1:
+                    dMags[i] = np.nan
+                    continue
 
-                        if dMag_lb >= singularity_dMag:
-                            break  # try next lb_subtraction
+                bounds = np.array([bounds[0], bounds[0] + 1])
+            else:
 
-                        # do coarse line search over region
-                        tmp = np.linspace(
-                            dMag_lb,
-                            singularity_dMag - 1e-6,
-                            10,
-                        )
-                        tmp2 = (
-                            self.calc_intTime(
-                                TL,
-                                s * len(tmp),
-                                args_denom[2],
-                                args_denom[3],
-                                tmp,
-                                args_denom[4],
-                                mode,
-                                TK,
-                            )
-                            - int_time
-                        )
+                # do coarse line search over region
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * (len(tmp) - 2),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp[1:-1],
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
+                tmp2 = np.hstack((lbtime, tmp2, ubtime))
 
-                        # look for sign flip
-                        dsigns = np.diff(np.sign(tmp2))
-                        if not (np.any(dsigns == 2)):
-                            break  # try next iteration
-                        ind = np.where(dsigns == 2)[0][0]
-                        bounds = tmp[ind : ind + 2]
-                        dMag_init = np.mean(bounds)
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
 
-                        try:
-                            dMag_min_res = minimize(
-                                self.dMag_per_intTime_obj,
-                                x0=np.array([dMag_init]),
-                                args=args_intTime,
-                                bounds=[bounds],
-                                method="L-BFGS-B",
-                                tol=1e-6,
-                            )
-                        except Exception:
-                            break
+            dMag_init = np.mean(bounds)
 
-                        dMag = (
-                            dMag_min_res["x"][0]
-                            if isinstance(dMag_min_res["x"], np.ndarray)
-                            else dMag_min_res["x"]
-                        )
-                        time_diff = dMag_min_res["fun"]
+            # run minimization
+            dMag_min_res = minimize(
+                self.dMag_per_intTime_obj,
+                x0=np.array([dMag_init]),
+                args=args_intTime,
+                bounds=[bounds],
+                method="L-BFGS-B",
+                tol=1e-6,
+            )
 
-                        # status check
+            success = dMag_min_res.get("success", False)
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+                continue
 
-                        message = dMag_min_res.get("message", None)
-                        success = dMag_min_res.get("success", False)
+            # if we're here, we failed.  let's try tightening the bounds and minimizing
+            # again
+            counter = 0
+            while not (success) and (counter < 3):
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * len(tmp),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp,
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
 
-                        if not (success) or (
-                            np.isnan(time_diff)
-                            or (time_diff > int_time.to(u.day).value / 20)
-                            or (np.abs(dMag - dMag_lb) < 0.01)
-                        ):
-                            lb_adjustment += 0.5
-                        else:
-                            converged = True
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
 
-                    if converged:
-                        break
+                dMag_init = np.mean(bounds)
 
-                if not converged:
-                    dMag = np.nan
+                dMag_min_res = minimize(
+                    self.dMag_per_intTime_obj,
+                    x0=np.array([dMag_init]),
+                    args=args_intTime,
+                    bounds=[bounds],
+                    method="L-BFGS-B",
+                    tol=1e-6,
+                )
 
-            dMags[i] = dMag
-            messages.append(message)
+                success = dMag_min_res.get("success", False)
+                counter += 1
+
+            # if we're still failing at this point, let's just accept an abnormal
+            # termination if the residual is ok (1e-4 of integration time)
+            if not (success):
+                if dMag_min_res.fun / int_time.to_value(u.day) < 1e-4:
+                    success = True
+
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+            else:
+                dMags[i] = np.nan
+            # end main loop
 
         return dMags
