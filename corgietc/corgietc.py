@@ -1,16 +1,18 @@
 import os
 import warnings
-
-import astropy.units as u
-import numpy as np
 from pathlib import Path
 
+import astropy.units as u
+import astropy.constants as const
+import numpy as np
+import scipy.interpolate
+from scipy.optimize import minimize, root_scalar
+from tqdm import tqdm
+
 from EXOSIMS.OpticalSystem.Nemati import Nemati
+from EXOSIMS.util._numpy_compat import copy_if_needed
 from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
-from EXOSIMS.util._numpy_compat import copy_if_needed
-import astropy.constants as const
-import scipy.interpolate
 
 
 class corgietc(Nemati):
@@ -694,6 +696,7 @@ class corgietc(Nemati):
         C_sp=None,
         TK=None,
         analytic_only=False,
+        singularity_dMags=None,
     ):
         """Finds achievable planet delta magnitude for one integration
         time per star in the input list at one working angle.
@@ -724,28 +727,250 @@ class corgietc(Nemati):
             analytic_only (bool):
                 If True, return the analytic solution for dMag. Not used by the
                 Prototype OpticalSystem.
+            singularity_dMags (~numpy.ndarray(float), optional):
+                Largest attainable delta Mag values.  If None (default) these are
+                computed at runtime.
+
 
         Returns:
             numpy.ndarray(float):
                 Achievable dMag for given integration time and working angle
 
-        .. warning::
-
-            Temporary. To be Updated.
-
         """
+
         # cast sInds to array
         sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
 
-        if (C_b is None) or (C_sp is None):
-            _, C_b, C_sp = self.Cp_Cb_Csp(
-                TL, sInds, fZ, JEZ, np.zeros(len(sInds)), WA, mode, TK=TK
+        # Return NaNs if user requests analytic_only (not supported here)
+        if analytic_only:
+            return np.full(len(sInds), np.nan)
+
+        # Initialize result array
+        dMags = np.zeros(len(sInds))
+
+        for i, int_time in enumerate(tqdm(intTimes, desc="Computing dMags", delay=2)):
+            if int_time == 0:
+                warnings.warn(
+                    "calc_dMag_per_intTime received intTime=0, returning nan."
+                )
+                dMags[i] = np.nan
+                continue
+
+            if np.isnan(int_time):
+                warnings.warn(
+                    "calc_dMag_per_intTime receive intTime = Nan, returning nan."
+                )
+                dMags[i] = np.nan
+                continue
+
+            if (WA[i] > mode["OWA"]) or (WA[i] < mode["IWA"]):
+                warnings.warn("WA outside [IWA, OWA], returning nan.")
+                dMags[i] = np.nan
+                continue
+
+            s = [sInds[i]]
+            args_denom = (TL, s, fZ[i].ravel(), JEZ[i].ravel(), WA[i].ravel(), mode, TK)
+            args_intTime = (*args_denom, int_time.ravel())
+
+            # Find the singularity dMag (limit as intTime approaches infinity)
+            if singularity_dMags is None:
+                if mode["syst"]["occulter"]:
+                    singularity_dMag = np.inf
+                else:
+                    try:
+                        f_a = self.int_time_denom_obj(10, *args_denom)
+                        f_b = self.int_time_denom_obj(30, *args_denom)
+
+                        if f_a * f_b > 0:
+                            warnings.warn(
+                                "No root found in bracket [10, 30], returning nan."
+                            )
+                            singularity_dMag = np.inf
+                            dMags[i] = np.nan
+                            continue
+
+                        singularity_res = root_scalar(
+                            self.int_time_denom_obj,
+                            args=args_denom,
+                            bracket=[10, 30],
+                            method="brentq",
+                        )
+                        singularity_dMag = singularity_res.root
+
+                    except Exception as e:
+                        warnings.warn(f"Root finding failed: {e}, returning nan.")
+                        singularity_dMag = np.inf
+                        dMags[i] = np.nan
+                        continue
+            else:
+                singularity_dMag = singularity_dMags[i]
+
+            # If infinite intTime, return singularity value and move on
+            if int_time == np.inf:
+                dMags[i] = singularity_dMag
+                continue
+
+            # Alternatively, we need to minimize time error between predicted and
+            # desired intTime
+
+            # First we need to establish bounds
+            # Initial upper bound is 1e-6 under the singularity dMag
+            # Initial lower bound is 5 magnitudes below that
+            bounds = singularity_dMag - np.array([5, 1e-6])
+            # compute integration time deltas for initial bounds and ensure that there's
+            # a sign flip
+            lbtime, ubtime = (
+                self.calc_intTime(
+                    TL,
+                    s * 2,
+                    args_denom[2],
+                    args_denom[3],
+                    bounds,
+                    args_denom[4],
+                    mode,
+                    TK,
+                )
+                - int_time
             )
 
-        C_p = mode["SNR"] * np.sqrt(C_sp**2 + C_b / intTimes)  # planet count rate
-        core_thruput = mode["syst"]["core_thruput"](mode["lam"], WA)
-        flux_star = TL.starFlux(sInds, mode)
+            # if the top bound produces a shorter shorter integration time, then we
+            # can safely return the saturation dMag
+            if np.sign(ubtime) != 1:
+                dMags[i] = singularity_dMag
+                continue
 
-        dMag = -2.5 * np.log10(C_p / (flux_star * mode["losses"] * core_thruput))
+            # the lower bound should produce an integration time below the requested
+            # time. if not, need to lower the bound until we find it. but once we do,
+            # that's our bounding box right there
+            if np.sign(lbtime) != -1:
+                while (np.sign(lbtime) != -1) and (bounds[0] >= -1):
+                    bounds[0] -= 1
+                    lbtime = (
+                        self.calc_intTime(
+                            TL,
+                            s,
+                            args_denom[2],
+                            args_denom[3],
+                            bounds[0],
+                            args_denom[4],
+                            mode,
+                            TK,
+                        )[0]
+                        - int_time
+                    )
 
-        return dMag.value
+                # if loop terminates without finding solution, we're probably dealing
+                # with an inversion in the curve and will need to do a finer search
+                if np.sign(lbtime) != -1:
+                    dMags[i] = np.nan
+                    continue
+
+                bounds = np.array([bounds[0], bounds[0] + 1])
+            else:
+
+                # do coarse line search over region
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * (len(tmp) - 2),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp[1:-1],
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
+                tmp2 = np.hstack((lbtime, tmp2, ubtime))
+
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
+
+            dMag_init = np.mean(bounds)
+
+            # run minimization
+            dMag_min_res = minimize(
+                self.dMag_per_intTime_obj,
+                x0=np.array([dMag_init]),
+                args=args_intTime,
+                bounds=[bounds],
+                method="L-BFGS-B",
+                tol=1e-6,
+            )
+
+            success = dMag_min_res.get("success", False)
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+                continue
+
+            # if we're here, we failed.  let's try tightening the bounds and minimizing
+            # again
+            counter = 0
+            while not (success) and (counter < 3):
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * len(tmp),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp,
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
+
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
+
+                dMag_init = np.mean(bounds)
+
+                dMag_min_res = minimize(
+                    self.dMag_per_intTime_obj,
+                    x0=np.array([dMag_init]),
+                    args=args_intTime,
+                    bounds=[bounds],
+                    method="L-BFGS-B",
+                    tol=1e-6,
+                )
+
+                success = dMag_min_res.get("success", False)
+                counter += 1
+
+            # if we're still failing at this point, let's just accept an abnormal
+            # termination if the residual is ok (1e-4 of integration time)
+            if not (success):
+                if dMag_min_res.fun / int_time.to_value(u.day) < 1e-4:
+                    success = True
+
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+            else:
+                dMags[i] = np.nan
+            # end main loop
+
+        return dMags
