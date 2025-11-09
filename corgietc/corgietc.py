@@ -450,7 +450,7 @@ class corgietc(Nemati):
 
         if(vmag_greater_than_9): 
             warnings.warn(
-                f"The vmag of stars and indices {indices} are greater than 9."
+                f"The vmag of stars at indices {indices} are greater than 9."
                 )
 
         # get mode elements
