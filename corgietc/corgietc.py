@@ -443,6 +443,15 @@ class corgietc(Nemati):
         # Star fluxes (ph/m^2/s)
         flux_star = TL.starFlux(sInds, mode)
 
+        #can check if starts identified have vmag 9 or greater, must be before the loop
+        vmag = TL.VMag() #create array of VMag
+        vmag_greater_than_9 = vmag > 9
+
+        if(vmag_greater_than_9): 
+            warnings.warn(
+                f"The vmag of stars and indices ___ are greater than 9."
+                )
+
         # get mode elements
         syst = mode["syst"]
         inst = mode["inst"]
