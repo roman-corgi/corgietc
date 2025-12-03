@@ -48,6 +48,8 @@ class corgietc(Nemati):
         pp_Factor_CBE (float)
             Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
             not set in scienceInstrument input specification definition. Defaults to 2.0
+        contrast_degradation (float)
+            Multiplier for rawcontrast (e.g. 2 represents 50% rawcontrast). Defaults to 1.0
         desiredRate (float)
             Target value for e-/pix/frame. Defaults to 0.1
         tfmin (float)
@@ -107,6 +109,7 @@ class corgietc(Nemati):
         tfmin=3,
         tfmax=100,
         frameThresh=0.5,
+        contrast_degradation = 1.0,
         forcePhotonCounting=False,
         **specs,
     ):
@@ -143,6 +146,7 @@ class corgietc(Nemati):
             "Rlam": Rlam,
             "Rconst": Rconst,
             "pp_Factor_CBE": pp_Factor_CBE,
+            "contrast_degradation": contrast_degradation,
         }
 
         Nemati.__init__(self, **specs)
@@ -285,6 +289,7 @@ class corgietc(Nemati):
         self.allowed_observingMode_kws.append("Scenario")
         self.allowed_observingMode_kws.append("StrayLight_Data")
         self.allowed_observingMode_kws.append("pp_Factor_CBE")
+        self.allowed_observingMode_kws.append("contrast_degradation")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -353,6 +358,9 @@ class corgietc(Nemati):
             mode["pp_Factor_CBE"] = mode.get(
                 "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
             )
+            #ensure contrast_degradation is in the mode
+            mode["contrast_degradation"] = mode.get(
+                "contrast_degradation", self.default_vals_extra2["contrast_degradation"])
 
     def construct_cg(self, mode, WA):
         "Repackage values at a single WA into CGParameters object"
@@ -549,7 +557,7 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9
+            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 / mode["contrast_degradation"]
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
