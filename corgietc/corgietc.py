@@ -451,6 +451,16 @@ class corgietc(Nemati):
         # Star fluxes (ph/m^2/s)
         flux_star = TL.starFlux(sInds, mode)
 
+        # check if stars identified have vmag 9 or greater, must be before the loop
+        vmag = TL.Vmag #create array of VMag
+        vmag_greater_than_9 = vmag > 9
+        names_greater_than_9 = TL.Name[vmag_greater_than_9]
+
+        if(np.any(vmag_greater_than_9)): #use np.any
+            warnings.warn(
+                f"Integration times for these targets may not be accurate: {names_greater_than_9}"
+                )
+
         # get mode elements
         syst = mode["syst"]
         inst = mode["inst"]
