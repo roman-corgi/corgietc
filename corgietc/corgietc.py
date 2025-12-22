@@ -49,7 +49,7 @@ class corgietc(Nemati):
             Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
             not set in scienceInstrument input specification definition. Defaults to 2.0
         contrast_degradation (float)
-            Multiplier for rawcontrast (e.g. 2 represents 50% rawcontrast). Defaults to 1.0
+            Multiplier for rawcontrast (e.g. 0.5 represents 50% rawcontrast). Defaults to 1.0
         desiredRate (float)
             Target value for e-/pix/frame. Defaults to 0.1
         tfmin (float)
@@ -557,7 +557,7 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 / mode["contrast_degradation"]
+            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 * mode["contrast_degradation"]
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
