@@ -109,7 +109,7 @@ class corgietc(Nemati):
         tfmin=3,
         tfmax=100,
         frameThresh=0.5,
-        contrast_degradation = 1.0,
+        contrast_degradation=1.0,
         forcePhotonCounting=False,
         **specs,
     ):
@@ -358,9 +358,10 @@ class corgietc(Nemati):
             mode["pp_Factor_CBE"] = mode.get(
                 "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
             )
-            #ensure contrast_degradation is in the mode
+            # ensure contrast_degradation is in the mode
             mode["contrast_degradation"] = mode.get(
-                "contrast_degradation", self.default_vals_extra2["contrast_degradation"])
+                "contrast_degradation", self.default_vals_extra2["contrast_degradation"]
+            )
 
     def construct_cg(self, mode, WA):
         "Repackage values at a single WA into CGParameters object"
@@ -452,14 +453,14 @@ class corgietc(Nemati):
         flux_star = TL.starFlux(sInds, mode)
 
         # check if stars identified have vmag 9 or greater, must be before the loop
-        vmag = TL.Vmag #create array of VMag
+        vmag = TL.Vmag  # create array of VMag
         vmag_greater_than_9 = vmag > 9
         names_greater_than_9 = TL.Name[vmag_greater_than_9]
 
-        if(np.any(vmag_greater_than_9)): #use np.any
+        if np.any(vmag_greater_than_9):  # use np.any
             warnings.warn(
                 f"Integration times for these targets may not be accurate: {names_greater_than_9}"
-                )
+            )
 
         # get mode elements
         syst = mode["syst"]
@@ -557,7 +558,11 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 * mode["contrast_degradation"]
+            rawContrast = (
+                syst["AvgRawContrast"](mode["lam"], planetWA)[0]
+                * 1e-9
+                * mode["contrast_degradation"]
+            )
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
@@ -677,6 +682,15 @@ class corgietc(Nemati):
                 Acol,
             )
 
+            # check for pol mode
+            if ("polfraction" in mode) and not (
+                (mode["polfraction"] == 0) or np.isnan(mode["polfraction"])
+            ):
+                # if we're doing a pol calculation, need to double detector noise rates
+                nvRatesCore.detDark *= 2
+                nvRatesCore.detCIC *= 2
+                nvRatesCore.detRead *= 2
+
             # populate outputs
             C_p[jj] = mode["f_SR"] * cphrate.planet * dQE
             C_b[jj] = nvRatesCore.total
@@ -700,6 +714,68 @@ class corgietc(Nemati):
             return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
+
+    def calc_intTime(self, TL, sInds, fZ, JEZ, dMag, WA, mode, TK=None):
+        """Finds integration times of target systems for a specific observing
+        mode (imaging or characterization), based on Nemati 2014 (SPIE).
+
+        Args:
+            TL (TargetList module):
+                TargetList class object
+            sInds (integer ndarray):
+                Integer indices of the stars of interest
+            fZ (astropy Quantity array):
+                Surface brightness of local zodiacal light in units of 1/arcsec2
+            JEZ (astropy Quantity array):
+                Intensity of exo-zodiacal light in units of ph/s/m2/arcsec2
+            dMag (float ndarray):
+                Differences in magnitude between planets and their host star
+            WA (astropy Quantity array):
+                Working angles of the planets of interest in units of arcsec
+            mode (dict):
+                Selected observing mode
+            TK (TimeKeeping object):
+                Optional TimeKeeping object (default None), used to model detector
+                degradation effects where applicable.
+
+        Returns:
+            intTime (astropy Quantity array):
+                Integration times in units of day
+
+        """
+
+        # electron counts
+        C_p, C_b, C_sp = self.Cp_Cb_Csp(TL, sInds, fZ, JEZ, dMag, WA, mode, TK=TK)
+        _C_p = C_p.to_value(self.inv_s)
+        _C_b = C_b.to_value(self.inv_s)
+        _C_sp = C_sp.to_value(self.inv_s)
+
+        # get SNR threshold
+        SNR = mode["SNR"]
+        # calculate integration time based on Nemati 2014
+        # if doing a pol calculation, include polarization fraction
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if ("polfraction" in mode) and not (
+                (mode["polfraction"] == 0) or np.isnan(mode["polfraction"])
+            ):
+                intTime = (
+                    np.true_divide(
+                        SNR**2.0 * _C_b,
+                        ((_C_p * mode["polfraction"]) ** 2.0 - (SNR * _C_sp) ** 2.0),
+                    )
+                    * self.s2d
+                )
+            else:
+                intTime = (
+                    np.true_divide(SNR**2.0 * _C_b, (_C_p**2.0 - (SNR * _C_sp) ** 2.0))
+                    * self.s2d
+                )
+        # infinite and NAN are set to zero
+        intTime[np.isinf(intTime) | np.isnan(intTime)] = np.nan
+        # negative values are set to zero
+        intTime[intTime < 0.0] = np.nan
+
+        return intTime << u.d
 
     def calc_dMag_per_intTime(
         self,
