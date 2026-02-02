@@ -1,19 +1,99 @@
 import os
 import warnings
-
-import astropy.units as u
-import numpy as np
 from pathlib import Path
 
+import astropy.units as u
+import astropy.constants as const
+import numpy as np
+import scipy.interpolate
+from scipy.optimize import minimize, root_scalar
+from tqdm import tqdm
+
 from EXOSIMS.OpticalSystem.Nemati import Nemati
+from EXOSIMS.util._numpy_compat import copy_if_needed
 from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
-from EXOSIMS.util._numpy_compat import copy_if_needed
-import astropy.constants as const
-import scipy.interpolate
 
 
 class corgietc(Nemati):
+    r"""corgietc Optical System class
+
+    Optical System Module based on cgi_noise model.
+
+    Args:
+        CritLam (float)
+            Default critical wavelength (Nyquist sampling) in nm. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 500
+        compbeamD (float)
+            Default compressed beam diameter in m. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.005
+        fnlFocLen (float)
+            Default final focal length in m. Only used if not set in scienceInstrument
+            input specification definition. Defaults to 0.26
+        PSF_x_lamD (float)
+            Default PSF core x extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.942
+        PSF_y_lamD (float)
+            Default PSF core y extent in lam/D. Only used if not set
+            in scienceInstrument input specification definition.  Defaults to 0.45
+        Rlamsq (float)
+            Quadratic term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 0.000854964
+        Rlam (float)
+            Linear term of resolving power at PSF model. Only used if not set in
+            scienceInstrument input specification definition. Defaults to -1.513136232
+        Rconst (float)
+            Constant term of resolving power at PSF model. Only used if not set
+            in scienceInstrument input specification definition. Defaults to 707.8977209
+        pp_Factor_CBE (float)
+            Post-processing factor (e.g., 30 for 30x speckle suppression). Only used if
+            not set in scienceInstrument input specification definition. Defaults to 2.0
+        contrast_degradation (float)
+            Multiplier for rawcontrast (e.g. 0.5 represents 50% rawcontrast). Defaults to 1.0
+        desiredRate (float)
+            Target value for e-/pix/frame. Defaults to 0.1
+        tfmin (float)
+            Minimum frame time in seconds. Defaults to 3
+        tfmax (float)
+            Maximum frame time in seconds. Defaults to 100
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True. Defaults to 0.5
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+            Defaults to False
+        **specs:
+            EXOSIMS input specification dictionary
+
+    Attributes:
+        default_vals_extra2 (dict):
+            Dictionary of local default values.
+        desiredRate (float)
+            Target value for e-/pix/frame.
+        frameThresh (float)
+            Threshold value at which to switch from photon counting to analog mode in
+            e-/pix/frame.  If the approximated value is above the threshold, analog mode
+            is used in calculating frame time and effective QE.  Ignored if
+            forcePhotonCounting is set to True.
+        forcePhotonCounting (float)
+            If True, always use photon counting mode regardless of frame counts.
+        hc (float):
+            h * c in m^3 kg s^-2
+        radas (float):
+            Conversion factor from arcsec to radians
+        SPECTRA_Data (cgi_noise.loadCSVrow.loadCSVrow):
+            Spectral data for reference stars
+        SPECTRA_deltaLambda (float):
+            Wavelength step (in m) of SPECTRA_Data
+        tfmin (float)
+            Minimum frame time in seconds.
+        tfmax (float)
+            Maximum frame time in seconds.
+
+    """
+
     def __init__(
         self,
         CritLam=500,
@@ -25,10 +105,16 @@ class corgietc(Nemati):
         Rlam=-1.513136232,
         Rconst=707.8977209,
         pp_Factor_CBE=2.0,
+        desiredRate=0.1,
+        tfmin=3,
+        tfmax=100,
+        frameThresh=0.5,
+        contrast_degradation = 1.0,
+        forcePhotonCounting=False,
         **specs,
     ):
 
-        # useful conversion factorс
+        # useful conversion factors
         self.radas = ((1 * u.arcsec).to(u.rad)).value
         self.hc = (const.h * const.c).to_value(u.m**3 * u.kg / u.s**2)
 
@@ -42,6 +128,13 @@ class corgietc(Nemati):
             - self.SPECTRA_Data.df.at[1, "Wavelength_m"]
         )
 
+        # set frame threshold values
+        self.tfmin = tfmin
+        self.tfmax = tfmax
+        self.desiredRate = desiredRate
+        self.frameThresh = frameThresh
+        self.forcePhotonCounting = forcePhotonCounting
+
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
             "CritLam": CritLam,
@@ -53,6 +146,7 @@ class corgietc(Nemati):
             "Rlam": Rlam,
             "Rconst": Rconst,
             "pp_Factor_CBE": pp_Factor_CBE,
+            "contrast_degradation": contrast_degradation,
         }
 
         Nemati.__init__(self, **specs)
@@ -60,6 +154,15 @@ class corgietc(Nemati):
         # add local defaults to outspec
         for k in self.default_vals_extra2:
             self._outspec[k] = self.default_vals_extra2[k]
+
+        for k in [
+            "desiredRate",
+            "tfmin",
+            "tfmax",
+            "frameThresh",
+            "forcePhotonCounting",
+        ]:
+            self._outspec[k] = getattr(self, k)
 
     def populate_starlightSuppressionSystems_extra(self):
 
@@ -186,6 +289,7 @@ class corgietc(Nemati):
         self.allowed_observingMode_kws.append("Scenario")
         self.allowed_observingMode_kws.append("StrayLight_Data")
         self.allowed_observingMode_kws.append("pp_Factor_CBE")
+        self.allowed_observingMode_kws.append("contrast_degradation")
 
         for nmode, mode in enumerate(self.observingModes):
             assert "Scenario" in mode and isinstance(
@@ -254,6 +358,9 @@ class corgietc(Nemati):
             mode["pp_Factor_CBE"] = mode.get(
                 "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
             )
+            #ensure contrast_degradation is in the mode
+            mode["contrast_degradation"] = mode.get(
+                "contrast_degradation", self.default_vals_extra2["contrast_degradation"])
 
     def construct_cg(self, mode, WA):
         "Repackage values at a single WA into CGParameters object"
@@ -344,10 +451,28 @@ class corgietc(Nemati):
         # Star fluxes (ph/m^2/s)
         flux_star = TL.starFlux(sInds, mode)
 
+        # check if stars identified have vmag 9 or greater, must be before the loop
+        vmag = TL.Vmag #create array of VMag
+        vmag_greater_than_9 = vmag > 9
+        names_greater_than_9 = TL.Name[vmag_greater_than_9]
+
+        if(np.any(vmag_greater_than_9)): #use np.any
+            warnings.warn(
+                f"Integration times for these targets may not be accurate: {names_greater_than_9}"
+                )
+
         # get mode elements
         syst = mode["syst"]
         inst = mode["inst"]
         lam_m = mode["lam"].to_value(u.m)
+        QE_img = (
+            inst["DET_QE_Data"]
+            .df.loc[
+                inst["DET_QE_Data"].df["lambda_nm"] <= mode["lam"].to_value(u.nm),
+                "QE_at_neg100degC",
+            ]
+            .iloc[-1]
+        )
 
         # set default degredation time if TimeKeeping object not provided
         if TK is None:
@@ -366,6 +491,20 @@ class corgietc(Nemati):
         C_p = np.zeros(len(sInds))
         C_b = np.zeros(len(sInds))
         C_sp = np.zeros(len(sInds))
+        if returnExtra:
+            extra = {
+                "dQE": np.zeros(len(sInds)),
+                "mpix": np.zeros(len(sInds)),
+                "throughput_rates": np.zeros(len(sInds), dtype=object),
+                "cphrate": np.zeros(len(sInds), dtype=object),
+                "ENF": np.zeros(len(sInds)),
+                "effReadnoise": np.zeros(len(sInds)),
+                "frameTime": np.zeros(len(sInds)),
+                "QE_img": np.zeros(len(sInds)),
+                "nvRatesCore": np.zeros(len(sInds), dtype=object),
+                "detNoiseRate": np.zeros(len(sInds), dtype=object),
+                "photonCounting": np.zeros(len(sInds), dtype=bool),
+            }
 
         # loop through all values
         for jj, ss in enumerate(sInds):
@@ -373,6 +512,13 @@ class corgietc(Nemati):
                 planetWA = WA[0]
             else:
                 planetWA = WA[jj]
+
+            # check for out of bounds WA
+            if (planetWA < mode["IWA"]) or (planetWA > mode["OWA"]):
+                C_p[jj] = 0
+                C_b[jj] = 0
+                C_sp[jj] = 0
+                continue
 
             if isinstance(dMag, (int, float)):
                 dMagi = dMag
@@ -411,7 +557,7 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9
+            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 * mode["contrast_degradation"]
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
@@ -462,11 +608,31 @@ class corgietc(Nemati):
                 ]
             )
 
+            # pre-compute frame time
+            if self.forcePhotonCounting:
+                photonCounting = True
+            else:
+                frameTime = round(
+                    min(
+                        self.tfmax,
+                        max(
+                            self.tfmin,
+                            self.desiredRate / (cphrate.total * QE_img / mpix),
+                        ),
+                    ),
+                    1,
+                )
+                approxPerPixelPerFrame = frameTime * cphrate.total * QE_img / mpix
+                if approxPerPixelPerFrame <= self.frameThresh:
+                    photonCounting = True
+                else:
+                    photonCounting = False
+
             ENF, effReadnoise, frameTime, dQE, QE_img = fl.compute_frame_time_and_dqe(
-                0.1,
-                3,
-                100,
-                True,
+                self.desiredRate,
+                self.tfmin,
+                self.tfmax,
+                photonCounting,
                 inst["DET_QE_Data"],
                 inst["DET_CBE_Data"],
                 lam_m,
@@ -516,7 +682,22 @@ class corgietc(Nemati):
             C_b[jj] = nvRatesCore.total
             C_sp[jj] = residSpecSdevRate
 
+            if returnExtra:
+                extra["dQE"][jj] = dQE
+                extra["frameTime"][jj] = frameTime
+                extra["mpix"][jj] = mpix
+                extra["throughput_rates"][jj] = throughput_rates
+                extra["cphrate"][jj] = cphrate
+                extra["ENF"][jj] = ENF
+                extra["effReadnoise"][jj] = effReadnoise
+                extra["QE_img"][jj] = QE_img
+                extra["nvRatesCore"][jj] = nvRatesCore
+                extra["detNoiseRate"][jj] = detNoiseRate
+                extra["photonCounting"][jj] = photonCounting
+
             # end loop through values
+        if returnExtra:
+            return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
@@ -533,6 +714,7 @@ class corgietc(Nemati):
         C_sp=None,
         TK=None,
         analytic_only=False,
+        singularity_dMags=None,
     ):
         """Finds achievable planet delta magnitude for one integration
         time per star in the input list at one working angle.
@@ -563,28 +745,250 @@ class corgietc(Nemati):
             analytic_only (bool):
                 If True, return the analytic solution for dMag. Not used by the
                 Prototype OpticalSystem.
+            singularity_dMags (~numpy.ndarray(float), optional):
+                Largest attainable delta Mag values.  If None (default) these are
+                computed at runtime.
+
 
         Returns:
             numpy.ndarray(float):
                 Achievable dMag for given integration time and working angle
 
-        .. warning::
-
-            Temporary. To be Updated.
-
         """
+
         # cast sInds to array
         sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
 
-        if (C_b is None) or (C_sp is None):
-            _, C_b, C_sp = self.Cp_Cb_Csp(
-                TL, sInds, fZ, JEZ, np.zeros(len(sInds)), WA, mode, TK=TK
+        # Return NaNs if user requests analytic_only (not supported here)
+        if analytic_only:
+            return np.full(len(sInds), np.nan)
+
+        # Initialize result array
+        dMags = np.zeros(len(sInds))
+
+        for i, int_time in enumerate(tqdm(intTimes, desc="Computing dMags", delay=2)):
+            if int_time == 0:
+                warnings.warn(
+                    "calc_dMag_per_intTime received intTime=0, returning nan."
+                )
+                dMags[i] = np.nan
+                continue
+
+            if np.isnan(int_time):
+                warnings.warn(
+                    "calc_dMag_per_intTime receive intTime = Nan, returning nan."
+                )
+                dMags[i] = np.nan
+                continue
+
+            if (WA[i] > mode["OWA"]) or (WA[i] < mode["IWA"]):
+                warnings.warn("WA outside [IWA, OWA], returning nan.")
+                dMags[i] = np.nan
+                continue
+
+            s = [sInds[i]]
+            args_denom = (TL, s, fZ[i].ravel(), JEZ[i].ravel(), WA[i].ravel(), mode, TK)
+            args_intTime = (*args_denom, int_time.ravel())
+
+            # Find the singularity dMag (limit as intTime approaches infinity)
+            if singularity_dMags is None:
+                if mode["syst"]["occulter"]:
+                    singularity_dMag = np.inf
+                else:
+                    try:
+                        f_a = self.int_time_denom_obj(10, *args_denom)
+                        f_b = self.int_time_denom_obj(30, *args_denom)
+
+                        if f_a * f_b > 0:
+                            warnings.warn(
+                                "No root found in bracket [10, 30], returning nan."
+                            )
+                            singularity_dMag = np.inf
+                            dMags[i] = np.nan
+                            continue
+
+                        singularity_res = root_scalar(
+                            self.int_time_denom_obj,
+                            args=args_denom,
+                            bracket=[10, 30],
+                            method="brentq",
+                        )
+                        singularity_dMag = singularity_res.root
+
+                    except Exception as e:
+                        warnings.warn(f"Root finding failed: {e}, returning nan.")
+                        singularity_dMag = np.inf
+                        dMags[i] = np.nan
+                        continue
+            else:
+                singularity_dMag = singularity_dMags[i]
+
+            # If infinite intTime, return singularity value and move on
+            if int_time == np.inf:
+                dMags[i] = singularity_dMag
+                continue
+
+            # Alternatively, we need to minimize time error between predicted and
+            # desired intTime
+
+            # First we need to establish bounds
+            # Initial upper bound is 1e-6 under the singularity dMag
+            # Initial lower bound is 5 magnitudes below that
+            bounds = singularity_dMag - np.array([5, 1e-6])
+            # compute integration time deltas for initial bounds and ensure that there's
+            # a sign flip
+            lbtime, ubtime = (
+                self.calc_intTime(
+                    TL,
+                    s * 2,
+                    args_denom[2],
+                    args_denom[3],
+                    bounds,
+                    args_denom[4],
+                    mode,
+                    TK,
+                )
+                - int_time
             )
 
-        C_p = mode["SNR"] * np.sqrt(C_sp**2 + C_b / intTimes)  # planet count rate
-        core_thruput = mode["syst"]["core_thruput"](mode["lam"], WA)
-        flux_star = TL.starFlux(sInds, mode)
+            # if the top bound produces a shorter shorter integration time, then we
+            # can safely return the saturation dMag
+            if np.sign(ubtime) != 1:
+                dMags[i] = singularity_dMag
+                continue
 
-        dMag = -2.5 * np.log10(C_p / (flux_star * mode["losses"] * core_thruput))
+            # the lower bound should produce an integration time below the requested
+            # time. if not, need to lower the bound until we find it. but once we do,
+            # that's our bounding box right there
+            if np.sign(lbtime) != -1:
+                while (np.sign(lbtime) != -1) and (bounds[0] >= -1):
+                    bounds[0] -= 1
+                    lbtime = (
+                        self.calc_intTime(
+                            TL,
+                            s,
+                            args_denom[2],
+                            args_denom[3],
+                            bounds[0],
+                            args_denom[4],
+                            mode,
+                            TK,
+                        )[0]
+                        - int_time
+                    )
 
-        return dMag.value
+                # if loop terminates without finding solution, we're probably dealing
+                # with an inversion in the curve and will need to do a finer search
+                if np.sign(lbtime) != -1:
+                    dMags[i] = np.nan
+                    continue
+
+                bounds = np.array([bounds[0], bounds[0] + 1])
+            else:
+
+                # do coarse line search over region
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * (len(tmp) - 2),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp[1:-1],
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
+                tmp2 = np.hstack((lbtime, tmp2, ubtime))
+
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
+
+            dMag_init = np.mean(bounds)
+
+            # run minimization
+            dMag_min_res = minimize(
+                self.dMag_per_intTime_obj,
+                x0=np.array([dMag_init]),
+                args=args_intTime,
+                bounds=[bounds],
+                method="L-BFGS-B",
+                tol=1e-6,
+            )
+
+            success = dMag_min_res.get("success", False)
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+                continue
+
+            # if we're here, we failed.  let's try tightening the bounds and minimizing
+            # again
+            counter = 0
+            while not (success) and (counter < 3):
+                tmp = np.linspace(
+                    bounds[0],
+                    bounds[1],
+                    10,
+                )
+                tmp2 = (
+                    self.calc_intTime(
+                        TL,
+                        s * len(tmp),
+                        args_denom[2],
+                        args_denom[3],
+                        tmp,
+                        args_denom[4],
+                        mode,
+                        TK,
+                    )
+                    - int_time
+                )
+
+                # look for sign flip
+                dsigns = np.diff(np.sign(tmp2))
+                ind = np.where(dsigns == 2)[0][0]
+                bounds = tmp[ind : ind + 2]
+
+                dMag_init = np.mean(bounds)
+
+                dMag_min_res = minimize(
+                    self.dMag_per_intTime_obj,
+                    x0=np.array([dMag_init]),
+                    args=args_intTime,
+                    bounds=[bounds],
+                    method="L-BFGS-B",
+                    tol=1e-6,
+                )
+
+                success = dMag_min_res.get("success", False)
+                counter += 1
+
+            # if we're still failing at this point, let's just accept an abnormal
+            # termination if the residual is ok (1e-4 of integration time)
+            if not (success):
+                if dMag_min_res.fun / int_time.to_value(u.day) < 1e-4:
+                    success = True
+
+            if success:
+                dMags[i] = (
+                    dMag_min_res["x"][0]
+                    if isinstance(dMag_min_res["x"], np.ndarray)
+                    else dMag_min_res["x"]
+                )
+            else:
+                dMags[i] = np.nan
+            # end main loop
+
+        return dMags

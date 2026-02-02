@@ -2,7 +2,7 @@ import os
 import importlib.resources
 
 name = "corgietc"
-__version__ = "1.1.0"
+__version__ = "1.4.0"
 
 # identify data directory and add to environment variables for this session
 datapath = importlib.resources.files("corgietc").joinpath("data")
