@@ -1,4 +1,4 @@
-from corgietc.corgietc import corgietc
+import corgietc
 import astropy.units as u
 import os
 import json
