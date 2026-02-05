@@ -701,6 +701,32 @@ class corgietc(Nemati):
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
+
+    def int_time_denom_obj(self, dMag, *args):
+        """
+        Objective function for calc_dMag_per_intTime's calculation of the root
+        of the denominator of calc_inTime to determine the upper bound to use
+        for minimizing to find the correct dMag. Only necessary for coronagraphs.
+
+        Args:
+            dMag (~numpy.ndarray(float)):
+                dMag being tested
+            *args:
+                all the other arguments that calc_intTime needs
+
+        Returns:
+            ~astropy.units.Quantity(~numpy.ndarray(float)):
+                Denominator of integration time expression
+        """
+        TL, sInds, fZ, JEZ, WA, mode, TK = args
+        C_p, C_b, C_sp = self.Cp_Cb_Csp(TL, sInds, fZ, JEZ, dMag, WA, mode, TK=TK)
+        denom = (
+            C_p.to_value(self.inv_s) ** 2
+            - (mode["SNR"] * C_sp.to_value(self.inv_s)) ** 2
+        )
+        return denom[0]
+
+
     def calc_dMag_per_intTime(
         self,
         intTimes,
