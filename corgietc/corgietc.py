@@ -683,9 +683,11 @@ class corgietc(Nemati):
             )
 
             # check for pol mode
-            if ("polfraction" in mode) and not (
-                (mode["polfraction"] == 0) or np.isnan(mode["polfraction"])
-            ):
+            if ("polfraction" in mode) and not (np.isnan(mode["polfraction"])):
+                assert (
+                    0 <= mode["polfraction"] <= 1
+                ), "Polarization fraction must be in [0,1]"
+
                 # if we're doing a pol calculation, need to double detector noise rates
                 nvRatesCore.detDark *= 2
                 nvRatesCore.detCIC *= 2
