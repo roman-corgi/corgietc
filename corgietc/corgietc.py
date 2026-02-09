@@ -757,9 +757,7 @@ class corgietc(Nemati):
         # calculate integration time based on Nemati 2014
         # if doing a pol calculation, include polarization fraction
         with np.errstate(divide="ignore", invalid="ignore"):
-            if ("polfraction" in mode) and not (
-                (mode["polfraction"] == 0) or np.isnan(mode["polfraction"])
-            ):
+            if ("polfraction" in mode) and not np.isnan(mode["polfraction"]):
                 intTime = (
                     np.true_divide(
                         SNR**2.0 * _C_b,
