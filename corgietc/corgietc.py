@@ -391,7 +391,8 @@ class corgietc(Nemati):
 
             #ensure contrast_degradation is in the mode
             mode["contrast_degradation"] = mode.get(
-                "contrast_degradation", self.default_vals_extra2["contrast_degradation"])
+                "contrast_degradation", self.default_vals_extra2["contrast_degradation"]
+            )
 
     def construct_cg(self, mode, WA):
         "Repackage values at a single WA into CGParameters object"
@@ -480,17 +481,17 @@ class corgietc(Nemati):
         sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
 
         # Star fluxes (ph/m^2/s)
-        flux_star = TL.starFlux(sInds, mode)
+        flux_star = TL.starFlux(sInds, mode).flatten()
 
         # check if stars identified have vmag 9 or greater, must be before the loop
-        vmag = TL.Vmag #create array of VMag
+        vmag = TL.Vmag  # create array of VMag
         vmag_greater_than_9 = vmag > 9
         names_greater_than_9 = TL.Name[vmag_greater_than_9]
 
-        if(np.any(vmag_greater_than_9)): #use np.any
+        if np.any(vmag_greater_than_9):
             warnings.warn(
                 f"Integration times for these targets may not be accurate: {names_greater_than_9}"
-                )
+            )
 
         # get mode elements
         syst = mode["syst"]
@@ -588,7 +589,11 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 * mode["contrast_degradation"]
+            rawContrast = (
+                syst["AvgRawContrast"](mode["lam"], planetWA)[0]
+                * 1e-9
+                * mode["contrast_degradation"]
+            )
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
@@ -730,6 +735,30 @@ class corgietc(Nemati):
             return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
+
+    def int_time_denom_obj(self, dMag, *args):
+        """
+        Objective function for calc_dMag_per_intTime's calculation of the root
+        of the denominator of calc_inTime to determine the upper bound to use
+        for minimizing to find the correct dMag. Only necessary for coronagraphs.
+
+        Args:
+            dMag (~numpy.ndarray(float)):
+                dMag being tested
+            *args:
+                all the other arguments that calc_intTime needs
+
+        Returns:
+            ~astropy.units.Quantity(~numpy.ndarray(float)):
+                Denominator of integration time expression
+        """
+        TL, sInds, fZ, JEZ, WA, mode, TK = args
+        C_p, C_b, C_sp = self.Cp_Cb_Csp(TL, sInds, fZ, JEZ, dMag, WA, mode, TK=TK)
+        denom = (
+            C_p.to_value(self.inv_s) ** 2
+            - (mode["SNR"] * C_sp.to_value(self.inv_s)) ** 2
+        )
+        return denom[0]
 
     def calc_dMag_per_intTime(
         self,
