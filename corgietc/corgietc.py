@@ -109,7 +109,7 @@ class corgietc(Nemati):
         tfmin=3,
         tfmax=100,
         frameThresh=0.5,
-        contrast_degradation = 1.0,
+        contrast_degradation=1.0,
         forcePhotonCounting=False,
         **specs,
     ):
@@ -358,9 +358,10 @@ class corgietc(Nemati):
             mode["pp_Factor_CBE"] = mode.get(
                 "pp_Factor_CBE", self.default_vals_extra2["pp_Factor_CBE"]
             )
-            #ensure contrast_degradation is in the mode
+            # ensure contrast_degradation is in the mode
             mode["contrast_degradation"] = mode.get(
-                "contrast_degradation", self.default_vals_extra2["contrast_degradation"])
+                "contrast_degradation", self.default_vals_extra2["contrast_degradation"]
+            )
 
     def construct_cg(self, mode, WA):
         "Repackage values at a single WA into CGParameters object"
@@ -449,17 +450,17 @@ class corgietc(Nemati):
         sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
 
         # Star fluxes (ph/m^2/s)
-        flux_star = TL.starFlux(sInds, mode)
+        flux_star = TL.starFlux(sInds, mode).flatten()
 
         # check if stars identified have vmag 9 or greater, must be before the loop
-        vmag = TL.Vmag #create array of VMag
+        vmag = TL.Vmag  # create array of VMag
         vmag_greater_than_9 = vmag > 9
         names_greater_than_9 = TL.Name[vmag_greater_than_9]
 
-        if(np.any(vmag_greater_than_9)): #use np.any
+        if np.any(vmag_greater_than_9):
             warnings.warn(
                 f"Integration times for these targets may not be accurate: {names_greater_than_9}"
-                )
+            )
 
         # get mode elements
         syst = mode["syst"]
@@ -557,7 +558,11 @@ class corgietc(Nemati):
             )
 
             # get contrast stability values (all are ppb in the interpolants)
-            rawContrast = syst["AvgRawContrast"](mode["lam"], planetWA)[0] * 1e-9 * mode["contrast_degradation"]
+            rawContrast = (
+                syst["AvgRawContrast"](mode["lam"], planetWA)[0]
+                * 1e-9
+                * mode["contrast_degradation"]
+            )
             if "SystematicC" in syst:
                 SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
             else:
@@ -701,7 +706,6 @@ class corgietc(Nemati):
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
-
     def int_time_denom_obj(self, dMag, *args):
         """
         Objective function for calc_dMag_per_intTime's calculation of the root
@@ -725,7 +729,6 @@ class corgietc(Nemati):
             - (mode["SNR"] * C_sp.to_value(self.inv_s)) ** 2
         )
         return denom[0]
-
 
     def calc_dMag_per_intTime(
         self,
