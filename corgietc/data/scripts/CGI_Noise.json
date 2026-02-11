@@ -312,7 +312,10 @@
             "lam": 575,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 2.0
+            "pp_Factor_CBE": 2.0,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
             "instName": "NF_B1_Imager",
@@ -321,7 +324,10 @@
             "lam": 575,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 2.0
+            "pp_Factor_CBE": 2.0,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
             "instName": "WF_B4_Imager",
@@ -330,7 +336,10 @@
             "lam": 825,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 2.0
+            "pp_Factor_CBE": 2.0,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
             "instName": "WF_B4_Imager",
@@ -339,7 +348,10 @@
             "lam": 825,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 2.0
+            "pp_Factor_CBE": 2.0,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
             "instName": "NF_B3_Spec",
@@ -348,7 +360,10 @@
             "lam": 730,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 1.2 
+            "pp_Factor_CBE": 1.2,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
             "instName": "NF_B3_Spec",
@@ -357,7 +372,10 @@
             "lam": 730,
             "SNR": 5,
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
-            "pp_Factor_CBE": 1.2
+            "pp_Factor_CBE": 1.2,
+            "RefStar_SpectralType": "a0v",
+            "RefStar_V_mag": 2.26,
+            "TimeonRefStar_tRef_per_tTar": 0.25
         }
     ],
  "modules": {
