@@ -314,7 +314,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 2.0,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
@@ -326,7 +326,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 2.0,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
@@ -338,7 +338,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 2.0,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
@@ -350,7 +350,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 2.0,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
@@ -362,7 +362,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 1.2,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         },
         {
@@ -374,7 +374,7 @@
             "StrayLight_Data":"$CGI_NOISE_DATA_DIR/Photometry/STRAY_CBE_250605.csv",
             "pp_Factor_CBE": 1.2,
             "RefStar_SpectralType": "a0v",
-            "RefStar_V_mag_CBE": 2.26,
+            "RefStar_V_mag": 2.26,
             "TimeonRefStar_tRef_per_tTar": 0.25
         }
     ],

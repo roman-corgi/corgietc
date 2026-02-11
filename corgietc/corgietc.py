@@ -50,7 +50,7 @@ class corgietc(Nemati):
             not set in scienceInstrument input specification definition. Defaults to 2.0
         RefStar_SpectralType (str)
             Spectral type of the reference star (eg a0v, b3v, a5v, f5v, g0v, g5v, k0v, k5v, m0v, m5v)
-        RefStar_V_mag_CBE (float)
+        RefStar_V_mag (float)
             Visual Magnitude of the reference star
         TimeonRefStar_tRef_per_tTar (float)
             Time on a reference star per target
@@ -115,10 +115,10 @@ class corgietc(Nemati):
         tfmin=3,
         tfmax=100,
         frameThresh=0.5,
-        RefStar_SpectralType = "a0v",
-        RefStar_V_mag_CBE = 2.26,
-        TimeonRefStar_tRef_per_tTar = 0.25,
-        contrast_degradation = 1.0,
+        RefStar_SpectralType="a0v",
+        RefStar_V_mag=2.26,
+        TimeonRefStar_tRef_per_tTar=0.25,
+        contrast_degradation=1.0,
         forcePhotonCounting=False,
         **specs,
     ):
@@ -156,7 +156,7 @@ class corgietc(Nemati):
             "Rconst": Rconst,
             "pp_Factor_CBE": pp_Factor_CBE,
             "RefStar_SpectralType": RefStar_SpectralType,
-            "RefStar_V_mag_CBE": RefStar_V_mag_CBE,
+            "RefStar_V_mag": RefStar_V_mag,
             "TimeonRefStar_tRef_per_tTar": TimeonRefStar_tRef_per_tTar,
             "contrast_degradation": contrast_degradation,
         }
@@ -302,7 +302,7 @@ class corgietc(Nemati):
         self.allowed_observingMode_kws.append("StrayLight_Data")
         self.allowed_observingMode_kws.append("pp_Factor_CBE")
         self.allowed_observingMode_kws.append("RefStar_SpectralType")
-        self.allowed_observingMode_kws.append("RefStar_V_mag_CBE")
+        self.allowed_observingMode_kws.append("RefStar_V_mag")
         self.allowed_observingMode_kws.append("TimeonRefStar_tRef_per_tTar")
         self.allowed_observingMode_kws.append("contrast_degradation")
 
@@ -379,17 +379,18 @@ class corgietc(Nemati):
                 "RefStar_SpectralType", self.default_vals_extra2["RefStar_SpectralType"]
             )
 
-            # ensure RefStar_V_mag_CBE is in the mode
-            mode["RefStar_V_mag_CBE"] = mode.get(
-                "RefStar_V_mag_CBE", self.default_vals_extra2["RefStar_V_mag_CBE"]
-            )   
+            # ensure RefStar_V_mag is in the mode
+            mode["RefStar_V_mag"] = mode.get(
+                "RefStar_V_mag", self.default_vals_extra2["RefStar_V_mag"]
+            )
 
             # ensure TimeonRefStar_tRef_per_tTar is in the mode
             mode["TimeonRefStar_tRef_per_tTar"] = mode.get(
-                "TimeonRefStar_tRef_per_tTar", self.default_vals_extra2["TimeonRefStar_tRef_per_tTar"]
-            ) 
+                "TimeonRefStar_tRef_per_tTar",
+                self.default_vals_extra2["TimeonRefStar_tRef_per_tTar"],
+            )
 
-            #ensure contrast_degradation is in the mode
+            # ensure contrast_degradation is in the mode
             mode["contrast_degradation"] = mode.get(
                 "contrast_degradation", self.default_vals_extra2["contrast_degradation"]
             )
@@ -680,13 +681,12 @@ class corgietc(Nemati):
                 inst["DET_CBE_Data"], monthsAtL2, frameTime, mpix, True
             )
 
-
             rdi_penalty = fl.rdi_noise_penalty(
                 mode["inBandFlux0_sum"],
                 starFlux,
                 mode["TimeonRefStar_tRef_per_tTar"],
                 mode["RefStar_SpectralType"],
-                mode["RefStar_V_mag_CBE"],
+                mode["RefStar_V_mag"],
             )
             k_sp = rdi_penalty["k_sp"]
             k_det = rdi_penalty["k_det"]
