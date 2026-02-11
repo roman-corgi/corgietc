@@ -38,6 +38,8 @@ scenarios = [
     "CON_SPEC_NFB3_SPC",
     "OPT_IMG_WFB4_SPC",
     "CON_IMG_WFB4_SPC",
+    "OPT_IMG_WFB1_SPC",
+    "CON_IMG_WFB1_SPC",
 ]
 
 # for scenario in scenarios:
