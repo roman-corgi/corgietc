@@ -1,6 +1,8 @@
 import os
+import re
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 
 import astropy.units as u
 import astropy.constants as const
@@ -14,6 +16,166 @@ from EXOSIMS.util._numpy_compat import copy_if_needed
 from cgi_noise import cginoiselib as fl
 from cgi_noise.tsnr_core import corePhotonRates
 
+import yaml
+from eetc.cgi_eetc import CGIEETC
+import eetc
+from astropy.table import Table
+from eetc.load import load_excam_config, load_flux_grid, _unpack_excam_config
+from eetc.excam_tools import _ENF
+
+eetc_root = eetc.lib_dir
+pointer_path_sci = os.path.join(eetc_root,'pointer_cont_frames.yaml')
+pointer_path_cal = os.path.join(eetc_root,'pointer.yaml')
+if os.path.exists(pointer_path_sci):
+    print('specified pointer file exists!\n')
+
+with open(pointer_path_sci, 'r') as file:
+    pointer_data = yaml.safe_load(file)
+
+for fi in pointer_data:
+    config_fi = os.path.join(eetc_root, pointer_data[fi])
+
+excam_config_file = os.path.join(eetc_root, pointer_data['excam_config'])
+
+with open(excam_config_file, 'r') as file:
+    excam_data = yaml.safe_load(file)
+
+sequence_file = os.path.join(eetc_root,pointer_data['sequences'])
+
+with open(sequence_file, 'r') as file:
+    data = yaml.safe_load(file)
+
+rows = []
+
+for config_name, params in data.items():
+    if isinstance(params, dict):
+        row = {'config_name': config_name}
+        row.update(params)
+        rows.append(row)
+config_table = Table(rows=rows)
+config_table.add_index('config_name')
+
+flux_grid_file = os.path.join(eetc_root, pointer_data['flux_grid'])
+eetc_flux_grid = load_flux_grid(flux_grid_file)
+eetc_valid_spts_v = list(eetc_flux_grid['v'][1])
+
+_SPT_CLASS_ORDER = "OBAFGKM"
+
+def rough_wall_clock(n_frames,
+                     exp_t,
+                     mode='continuous',
+                     readout_t=0.264,
+                     transfer_time=3.):
+    """
+    Compute the rough wall clock time for a given observation sequence.
+    
+    Computes the total exposure time including readout/transfer overheads
+    for a given observation sequence.
+
+    Parameters
+    ----------
+    n_frames : int or float
+        Number of exposures.
+    exp_t : float
+        Individual frame exposure time in seconds.
+    mode : str, optional
+        Observation mode - if set to 'continuous' (default), the
+        total wall clock time is computed assuming continuous reads 
+        with frame transfer at the end. This is the standard for 'science'
+        observations. If not set to continuous, it is assumed that each
+        frame takes a frame transfer time hit. This is generally the 
+        assumed mode for unocculted calibration observations.
+    readout_t : float, optional
+        Single EXCAM exposure readout time in seconds. Default is 0.264.
+    transfer_time : float, optional
+        EXCAM Science frame transfer time in seconds. Default is 3.0.
+
+    Returns
+    -------
+    float
+        Total wall clock time in seconds.
+
+    Notes
+    -----
+    EXCAM has a 0.264 second read time for SCI-sized frames.
+    In continuous exposure mode, EXCAM frames can only be transferred once
+    every 3 seconds due to data rate limitations. Very short exposures
+    will have large overheads!
+    
+    EETC has a more accurate version built in for fixed-integration-time
+    calculation for using EXCAM in "burst" mode.
+    
+    For SCI observations, transfer occurs while exposing (no n_frames * transfer_time penalty). 
+    
+    For CAL observations, frames are read out after each exposure and transferred in bulk at the end
+    (includes n_frames * readout_time and n_frames * transfer_time penalty).
+    """
+    # SCI observations are reading out while exposing
+    # (no n_frames * readout_time penalty)
+    if mode == 'continuous':
+        if exp_t < transfer_time:
+            frame_t = transfer_time + readout_t 
+        else:
+            frame_t = exp_t + readout_t
+        return frame_t * n_frames + transfer_time
+    # CALIBRATION observations take the n_frames * (readout_time + transfer_time) penalty
+    else:
+        frame_t = exp_t + readout_t
+        return n_frames * (frame_t + transfer_time)
+    
+def _parse_spt(spt):
+    """Roughly parse a spectral type string into (class_index, subclass,
+    luminosity_class) for nearest-match purposes.
+ 
+    This is a best-effort parser, not a rigorous spectral classification
+    tool, it exists only to find the closest available entry in EETC's
+    discrete flux grid for a given TargetList spectral type string.
+    """
+    m = re.match(r"\s*([OBAFGKM])\s*(\d+(?:\.\d+)?)?\s*([IV]+.*)?", spt.upper())
+    if not m:
+        return (len(_SPT_CLASS_ORDER), 5.0, "V")
+    cls_letter, subclass, lumclass = m.groups()
+    cls_idx = (
+        _SPT_CLASS_ORDER.index(cls_letter)
+        if cls_letter in _SPT_CLASS_ORDER
+        else len(_SPT_CLASS_ORDER)
+    )
+    sub = float(subclass) if subclass else 5.0
+    return (cls_idx, sub, (lumclass or "V").strip())
+
+def match_spt_to_eetc_grid(spt, valid_spts=eetc_valid_spts_v):
+    """Find the closest available EETC flux-grid spectral type to `spt`.
+ 
+    EETC's CGIEETC class requires an exact (case-insensitive) match against
+    its internal flux grid's spectral-type list (`valid_spts`). Most
+    catalog/TargetList spectral types will not match exactly.  This performs
+    a simple nearest-neighbor match in (spectral-class, subclass) space,
+    preferring an exact luminosity-class match where available and falling
+    back to any luminosity class otherwise.
+ 
+    Args:
+        spt (str):
+            Spectral type string to match, e.g. "G2V", "K3.5 III".
+        valid_spts (list(str)):
+            Candidate spectral types to match against (default:
+            `eetc_valid_spts_v`, the types available for phot="v").
+ 
+    Returns:
+        str: The closest entry in `valid_spts` (verbatim, as found in the
+        grid -- pass this directly to `CGIEETC(..., spt=...)`).
+    """
+    target = _parse_spt(spt)
+    parsed = [(_parse_spt(s), s) for s in valid_spts]
+ 
+    # prefer matches with the same luminosity class, if any exist
+    same_lum = [p for p in parsed if p[0][2] == target[2]]
+    candidates = same_lum if same_lum else parsed
+ 
+    def _dist(p):
+        (cls_idx, sub, _), _ = p
+        return abs((cls_idx * 10 + sub) - (target[0] * 10 + target[1]))
+ 
+    return min(candidates, key=_dist)[1]
 
 class corgietc(Nemati):
     r"""corgietc Optical System class
@@ -146,6 +308,8 @@ class corgietc(Nemati):
         self.frameThresh = frameThresh
         self.forcePhotonCounting = forcePhotonCounting
 
+        self._eetc_star_cache = {}
+        self.eetc_excam_config = load_excam_config(excam_config_file)
         # package inputs for use in popoulate*_extra
         self.default_vals_extra2 = {
             "CritLam": CritLam,
@@ -446,6 +610,160 @@ class corgietc(Nemati):
         )
 
         return out
+    
+    def _get_eetc_sequence_name(self, mode):
+        """Resolve the EETC `sequence_name` to use for star-flux calibration
+        for a given corgietc observing `mode`.
+ 
+        corgietc's `mode` dict (unlike EETC's own examples) doesn't carry
+        the FPAM/FSAM/CFAM/DPAM/SPAM_LSAM optical-configuration keys that
+        EETC's `sequences.yaml`/`config_table` are indexed by -- only a
+        human-readable `mode["Scenario"]` string. There is no general,
+        reliable way to derive one from the other without a lookup table
+        that maps corgietc Scenario names to EETC optical configurations
+        (I don't have visibility into corgietc's Scenario definitions, so I
+        can't build that table for you here). Instead, this looks for one
+        of the following, in order:
+ 
+          1. `mode["eetc_sequence_name"]` -- an explicit EETC sequence
+             config_name string, if you already know it.
+          2. `mode["eetc_search"]` -- a dict of config_table column/value
+             pairs to search for (e.g.
+             `{"mode": "excam_imaging", "cfam": "1F", "fpam": "open_12", ...}`),
+             mirroring the `search_dict` pattern in the EETC tutorial
+             notebook.
+ 
+        Use `search_eetc_sequences()` (below) to explore `config_table` and
+        find the right values for your mode, matching the EETC tutorial's
+        guidance: for coronagraphic observations, select the "open" FPAM
+        setting (e.g. "open_12" for bands 1/2), *not* the coronagraph mask
+        setting -- the flux computed here is the *unocculted* reference
+        flux, matching the role of `TL.starFlux()` in the rest of
+        `Cp_Cb_Csp`. Coronagraph-specific attenuation (contrast, PSF core
+        throughput, etc.) is still applied afterwards using cgi_noise's own
+        `throughput_rates`/`rawContrast`/`cg` values, same as before.
+ 
+        Args:
+            mode (dict): Selected observing mode.
+ 
+        Returns:
+            str: EETC sequence `config_name`.
+        """
+        if "eetc_sequence_name" in mode:
+            return mode["eetc_sequence_name"]
+ 
+        if "eetc_search" in mode:
+            mask = np.ones(len(config_table["mode"]), dtype=bool)
+            for key, val in mode["eetc_search"].items():
+                mask &= config_table[key] == val
+            matches = config_table[mask]["config_name"].value
+            if len(matches) == 0:
+                raise ValueError(
+                    "No EETC sequence matches mode['eetc_search'] = "
+                    f"{mode['eetc_search']!r}. Use search_eetc_sequences() "
+                    "to explore available config_table entries."
+                )
+            return matches[0]
+ 
+        raise ValueError(
+            "Cp_Cb_Csp(..., fluxModel='eetc') requires either "
+            "mode['eetc_sequence_name'] (an explicit EETC sequence name) "
+            "or mode['eetc_search'] (a dict of config_table column/value "
+            "pairs to search for, e.g. {'mode': 'excam_imaging', "
+            "'cfam': '1F', 'fpam': 'open_12', 'dpam': 'imaging_lens', "
+            "'spam_lsam': 'open_spam_nfov_lsam', 'fsam': 'open'}) to be "
+            "set. See search_eetc_sequences() to find the right values "
+            "for your mode."
+        )
+ 
+    def search_eetc_sequences(self, **kwargs):
+        """Search EETC's `config_table` (all available sequence
+        configurations) for entries matching the given column/value pairs.
+ 
+        Convenience wrapper mirroring the search pattern used in the EETC
+        tutorial notebook (`eetc_tutorial_CPP_obs.ipynb`, cell 12). Useful
+        for finding the right value to put in
+        `mode["eetc_search"]`/`mode["eetc_sequence_name"]`.
+ 
+        Args:
+            **kwargs: config_table column/value pairs to filter on, e.g.
+                `search_eetc_sequences(mode="excam_imaging", cfam="1F")`.
+                With no arguments, returns the full table.
+ 
+        Returns:
+            astropy.table.Table: Matching rows of `config_table`.
+        """
+        mask = np.ones(len(config_table["mode"]), dtype=bool)
+        for key, val in kwargs.items():
+            mask &= config_table[key] == val
+        return config_table[mask]
+ 
+    def _get_eetc_star_flux(self, TL, sInds, mode):
+        """Compute per-star unocculted flux rates using EETC's
+        `CGIEETC.calc_flux_rate`, as a replacement for `TL.starFlux()`.
+ 
+        For each star, builds (or reuses a cached) `CGIEETC` object from
+        the star's V magnitude (`TL.Vmag`) and a best-match spectral type
+        (`TL.Spec`, matched against EETC's discrete flux grid via
+        `match_spt_to_eetc_grid`), then evaluates `calc_flux_rate()` for the
+        sequence resolved by `_get_eetc_sequence_name(mode)`.
+ 
+        Important: the returned flux is in **photoelectrons/second**,
+        integrated over the full CFAM bandpass at the focal plane, with the
+        full open/unocculted OTA+CGI throughput *and* detector QE already
+        applied (see `CGIEETC.calc_flux_rate` docstring) -- this is a very
+        different quantity from `TL.starFlux()`'s ph/m^2/s flux density at
+        the telescope aperture. `Cp_Cb_Csp` accounts for this by not re-applying the
+        collecting area (`Acol`) to EETC-sourced fluxes, and by dividing
+        out an estimated QE (see `qe_backout` below) so the rest of the
+        Nemati noise pipeline -- which expects pre-QE photon rates -- stays
+        self-consistent regardless of which `detectorModel` is chosen.
+ 
+        Args:
+            TL (:ref:`TargetList`): TargetList class object.
+            sInds (~numpy.ndarray(int)): Integer indices of the stars of
+                interest.
+            mode (dict): Selected observing mode.
+ 
+        Returns:
+            tuple:
+                flux_star (~numpy.ndarray(float)):
+                    Total unocculted flux rate per star [e-/s].
+                flux_star_peak (~numpy.ndarray(float)):
+                    Peak-pixel unocculted flux rate per star [e-/s].
+                matched_spts (list(str)):
+                    The EETC flux-grid spectral type actually used for each
+                    star (for diagnostics -- may differ from the catalog's
+                    raw spectral type, since EETC only supports a discrete
+                    grid; see `match_spt_to_eetc_grid`).
+        """
+        sequence_name = self._get_eetc_sequence_name(mode)
+ 
+        flux_star = np.zeros(len(sInds))
+        flux_star_peak = np.zeros(len(sInds))
+        matched_spts = []
+ 
+        for jj, ss in enumerate(sInds):
+            mag = float(TL.Vmag[ss])
+            raw_spt = str(TL.Spec[ss]).strip()
+            spt = match_spt_to_eetc_grid(raw_spt)
+            matched_spts.append(spt)
+ 
+            cache_key = (spt, round(mag, 3))
+            cgieetc = self._eetc_star_cache.get(cache_key)
+            if cgieetc is None:
+                cgieetc = CGIEETC(
+                    mag=mag, phot="v", spt=spt, pointer_path=pointer_path_sci
+                )
+                self._eetc_star_cache[cache_key] = cgieetc
+ 
+            total_flux_rate, peak_flux_rate = cgieetc.calc_flux_rate(
+                sequence_name=sequence_name
+            )
+            flux_star[jj] = total_flux_rate
+            flux_star_peak[jj] = peak_flux_rate
+ 
+        return flux_star, flux_star_peak, matched_spts
 
     def Cp_Cb_Csp(self, TL, sInds, fZ, JEZ, dMag, WA, mode, returnExtra=False, TK=None):
         """Calculates electron count rates for planet signal, background noise,
@@ -756,6 +1074,556 @@ class corgietc(Nemati):
 
         return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
 
+    def Cp_Cb_Csp_eetc(
+        self,
+        TL,
+        sInds,
+        fZ,
+        JEZ,
+        dMag,
+        WA,
+        mode,
+        returnExtra=False,
+        TK=None,
+        detectorModel="eetc",
+        fluxModel="eetc",
+    ):
+        """Calculates electron count rates for planet signal, background noise,
+        and speckle residuals, sourcing star flux and/or the detector model
+        from EETC instead of cgi_noise.
+ 
+        This is a standalone counterpart to `Cp_Cb_Csp` -- that function is
+        unmodified and always uses cgi_noise for everything. This function
+        defaults to EETC for both the flux and detector model (see
+        `detectorModel`/`fluxModel` below), but either can be set back to
+        `"cgi_noise"` for side-by-side comparisons.
+ 
+        Args:
+            TL (:ref:`TargetList`):
+                TargetList class object
+            sInds (~numpy.ndarray(int)):
+                Integer indices of the stars of interest
+            fZ (~astropy.units.Quantity(~numpy.ndarray(float))):
+                Surface brightness of local zodiacal light in units of 1/arcsec2
+            JEZ (~astropy.units.Quantity(~numpy.ndarray(float))):
+                Intensity of exo-zodiacal light in units of ph/s/m2/arcsec2
+            dMag (~numpy.ndarray(float)):
+                Differences in magnitude between planets and their host star
+            WA (~astropy.units.Quantity(~numpy.ndarray(float))):
+                Working angles of the planets of interest in units of arcsec
+            mode (dict):
+                Selected observing mode
+            returnExtra (bool):
+                Optional flag, default False, set True to return additional rates for
+                validation
+            TK (:ref:`TimeKeeping`, optional):
+                Optional TimeKeeping object (default None), used to model detector
+                degradation effects where applicable.
+            detectorModel (str):
+                Either "eetc" (default here) or "cgi_noise". When "eetc",
+                the frame-time/ENF/QE and detector-noise-rate calculations
+                are sourced from EETC's excam_config.yaml instead of
+                cgi_noise's DET_QE_Data/DET_CBE_Data curves.
+            fluxModel (str):
+                Either "eetc" (default here, uses
+                `CGIEETC.calc_flux_rate()`) or "cgi_noise" (uses
+                `TL.starFlux()`, matching `Cp_Cb_Csp`). When "eetc", `mode`
+                must contain `"eetc_sequence_name"` or `"eetc_search"` (see
+                `_get_eetc_sequence_name`).
+ 
+ 
+        Returns:
+            tuple:
+                C_p (~astropy.units.Quantity(~numpy.ndarray(float))):
+                    Planet signal electron count rate in units of 1/s
+                C_b (~astropy.units.Quantity(~numpy.ndarray(float))):
+                    Background noise electron count rate in units of 1/s
+                C_sp (~astropy.units.Quantity(~numpy.ndarray(float))):
+                    Residual speckle spatial structure (systematic error)
+                    in units of 1/s
+ 
+        """
+        if detectorModel not in ("cgi_noise", "eetc"):
+            raise ValueError(
+                f"detectorModel must be 'cgi_noise' or 'eetc', got {detectorModel!r}"
+            )
+        if fluxModel not in ("cgi_noise", "eetc"):
+            raise ValueError(
+                f"fluxModel must be 'cgi_noise' or 'eetc', got {fluxModel!r}"
+            )
+ 
+        # cast sInds to array
+        sInds = np.array(sInds, ndmin=1, copy=copy_if_needed)
+ 
+        # check if stars identified have vmag 9 or greater, must be before the loop
+        vmag = TL.Vmag  # create array of VMag
+        vmag_greater_than_9 = vmag > 9
+        names_greater_than_9 = TL.Name[vmag_greater_than_9]
+ 
+        if np.any(vmag_greater_than_9):
+            warnings.warn(
+                "Integration times for these targets may not be accurate: "
+                f"{names_greater_than_9}"
+            )
+ 
+        # get mode elements
+        syst = mode["syst"]
+        inst = mode["inst"]
+        lam_m = mode["lam"].to_value(u.m)
+ 
+        detQE_estimate = (
+            inst["DET_QE_Data"]
+            .df.loc[
+                inst["DET_QE_Data"].df["lambda_nm"] <= mode["lam"].to_value(u.nm),
+                "QE_at_neg100degC",
+            ]
+            .iloc[-1]
+        )
+
+        if detectorModel == "eetc":
+            QE_img = 1.0
+        else:
+            QE_img = detQE_estimate
+ 
+        if fluxModel == "eetc":
+            (
+                flux_star_eetc,
+                flux_star_peak_eetc,
+                eetc_matched_spts,
+            ) = self._get_eetc_star_flux(TL, sInds, mode)
+        else:
+            flux_star = TL.starFlux(sInds, mode).flatten()
+ 
+        # set default degredation time if TimeKeeping object not provided
+        if TK is None:
+            monthsAtL2 = 21
+        else:
+            monthsAtL2 = TK.currentTimeNorm.to_value(u.d) / 30.4375  # convert to months
+ 
+        if monthsAtL2 > 63:
+            warnings.warn(
+                f"You have specified a time at L2 of {monthsAtL2} months.  "
+                "The detector degradation model is not valid beyond 63 "
+                "months, and may produce anomolous values."
+            )
+ 
+        # allocate outputs
+        C_p = np.zeros(len(sInds))
+        C_b = np.zeros(len(sInds))
+        C_sp = np.zeros(len(sInds))
+        if returnExtra:
+            extra = {
+                "dQE": np.zeros(len(sInds)),
+                "mpix": np.zeros(len(sInds)),
+                "throughput_rates": np.zeros(len(sInds), dtype=object),
+                "cphrate": np.zeros(len(sInds), dtype=object),
+                "ENF": np.zeros(len(sInds)),
+                "effReadnoise": np.zeros(len(sInds)),
+                "frameTime": np.zeros(len(sInds)),
+                "QE_img": np.zeros(len(sInds)),
+                "nvRatesCore": np.zeros(len(sInds), dtype=object),
+                "detNoiseRate": np.zeros(len(sInds), dtype=object),
+                "photonCounting": np.zeros(len(sInds), dtype=bool),
+            }
+            if fluxModel == "eetc":
+                extra["eetc_matched_spt"] = eetc_matched_spts
+                extra["eetc_flux_star"] = flux_star_eetc
+                extra["eetc_flux_star_peak"] = flux_star_peak_eetc
+ 
+        # loop through all values
+        for jj, ss in enumerate(sInds):
+            if WA.size == 1:
+                planetWA = WA[0]
+            else:
+                planetWA = WA[jj]
+ 
+            # check for out of bounds WA
+            if (planetWA < mode["IWA"]) or (planetWA > mode["OWA"]):
+                C_p[jj] = 0
+                C_b[jj] = 0
+                C_sp[jj] = 0
+                continue
+ 
+            if isinstance(dMag, (int, float)):
+                dMagi = dMag
+            elif len(dMag) == 1:
+                dMagi = dMag[0]
+            else:
+                dMagi = dMag[jj]
+ 
+            if len(fZ) == 1:
+                fZi = fZ[0]
+            else:
+                fZi = fZ[jj]
+ 
+            if len(JEZ) == 1:
+                JEZi = JEZ[0]
+            else:
+                JEZi = JEZ[jj]
+ 
+            # package up coronagraph values
+            cg = self.construct_cg(mode, planetWA)
+ 
+            # grab relevant detector values
+            if "mpix" in mode:
+                mpix = mode["mpix"]
+            else:
+                mpix = (
+                    cg.omegaPSF
+                    * self.radas**2
+                    * (lam_m / cg.CGdesignWL) ** 2
+                    * (2 * self.pupilDiam / inst["CritLam"]).decompose().value ** 2
+                )
+ 
+            # get throughput values
+            _, throughput_rates = fl.compute_throughputs(
+                syst["Throughput_Data"], cg, "uniform"
+            )
+ 
+            # get contrast stability values (all are ppb in the interpolants)
+            rawContrast = (
+                syst["AvgRawContrast"](mode["lam"], planetWA)[0]
+                * 1e-9
+                * mode["contrast_degradation"]
+            )
+            if "SystematicC" in syst:
+                SystematicCont = syst["SystematicC"](mode["lam"], planetWA)[0] * 1e-9
+            else:
+                SystematicCont = 0
+            ExtContStab = syst["ExtContStab"](mode["lam"], planetWA)[0] * 1e-9
+            IntContStab = syst["IntContStab"](mode["lam"], planetWA)[0] * 1e-9
+            selDeltaC = np.sqrt(
+                (ExtContStab**2) + (IntContStab**2) + (SystematicCont**2)
+            )
+ 
+            # get count rates for star, planet, speckle
+            Acol = self.pupilArea.to_value(u.m**2)
+            if fluxModel == "eetc":
+                starFlux = flux_star_eetc[jj] 
+                planetFlux = starFlux * 10.0 ** (-0.4 * dMagi)
+                planet_rate = planetFlux * throughput_rates["planet"] * Acol
+                speckle_rate = (
+                    starFlux
+                    * rawContrast
+                    * cg.PSFpeakI
+                    * cg.CGintmpix
+                    * throughput_rates["speckle"]
+                    * Acol
+                )
+            else:
+                starFlux = flux_star[jj].value
+                planetFlux = starFlux * 10.0 ** (-0.4 * dMagi)
+                planet_rate = planetFlux * throughput_rates["planet"] * Acol
+                speckle_rate = (
+                    starFlux
+                    * rawContrast
+                    * cg.PSFpeakI
+                    * cg.CGintmpix
+                    * throughput_rates["speckle"]
+                    * Acol
+                )
+ 
+            # get zodi rates
+            F0_ph_s_m2 = mode["F0"].to_value(u.ph / u.s / u.m**2)
+            locZodiAngFlux = F0_ph_s_m2 * fZi.to_value(1 / u.arcsec**2)
+            exoZodiAngFlux = JEZi.to_value(u.ph / u.s / u.m**2 / u.arcsec**2)
+            locZodi = (
+                locZodiAngFlux * cg.omegaPSF * throughput_rates["local_zodi"] * Acol
+            )
+            exoZodi = exoZodiAngFlux * cg.omegaPSF * throughput_rates["exo_zodi"] * Acol
+ 
+            cphrate = corePhotonRates(
+                planet=planet_rate,
+                speckle=speckle_rate,
+                locZodi=locZodi,
+                exoZodi=exoZodi,
+                straylt=mode["stray_ph_s_pix"] * mpix,
+            )
+            cphrate.total = sum(
+                [
+                    cphrate.planet,
+                    cphrate.speckle,
+                    cphrate.locZodi,
+                    cphrate.exoZodi,
+                    cphrate.straylt,
+                ]
+            )
+ 
+            # pre-compute frame time
+            if self.forcePhotonCounting:
+                photonCounting = True
+            else:
+                frameTime = round(
+                    min(
+                        self.tfmax,
+                        max(
+                            self.tfmin,
+                            self.desiredRate / (cphrate.total * QE_img / mpix),
+                        ),
+                    ),
+                    1,
+                )
+                approxPerPixelPerFrame = frameTime * cphrate.total * QE_img / mpix
+                if approxPerPixelPerFrame <= self.frameThresh:
+                    photonCounting = True
+                else:
+                    photonCounting = False
+ 
+            if detectorModel == "eetc":
+                (
+                    ENF,
+                    effReadnoise,
+                    frameTime,
+                    dQE,
+                    QE_img,
+                    g_used,
+                ) = self.compute_frame_time_and_dqe_eetc(
+                    self.desiredRate,
+                    self.tfmin,
+                    self.tfmax,
+                    photonCounting,
+                    cphrate.total,
+                )
+ 
+                detNoiseRate = self.detector_noise_rates_eetc(
+                    frameTime, mpix, g_used
+                )
+            else:
+                (
+                    ENF,
+                    effReadnoise,
+                    frameTime,
+                    dQE,
+                    QE_img,
+                ) = fl.compute_frame_time_and_dqe(
+                    self.desiredRate,
+                    self.tfmin,
+                    self.tfmax,
+                    photonCounting,
+                    inst["DET_QE_Data"],
+                    inst["DET_CBE_Data"],
+                    lam_m,
+                    mpix,
+                    cphrate.total,
+                )
+ 
+                detNoiseRate = fl.detector_noise_rates(
+                    inst["DET_CBE_Data"], monthsAtL2, frameTime, mpix, True
+                )
+ 
+            rdi_penalty = fl.rdi_noise_penalty(
+                mode["inBandFlux0_sum"],
+                starFlux,
+                mode["TimeonRefStar_tRef_per_tTar"],
+                mode["RefStar_SpectralType"],
+                mode["RefStar_V_mag"],
+            )
+            k_sp = rdi_penalty["k_sp"]
+            k_det = rdi_penalty["k_det"]
+            k_lzo = rdi_penalty["k_lzo"]
+            k_ezo = rdi_penalty["k_ezo"]
+ 
+            nvRatesCore, residSpecSdevRate = fl.noiseRates(
+                cphrate,
+                QE_img,
+                dQE,
+                ENF,
+                detNoiseRate,
+                k_sp,
+                k_det,
+                k_lzo,
+                k_ezo,
+                mode["f_SR"],
+                starFlux,
+                selDeltaC,
+                mode["pp_Factor_CBE"],
+                cg,
+                throughput_rates["speckle"],
+                Acol,
+            )
+ 
+            # check for pol mode
+            if ("polfraction" in mode) and not (np.isnan(mode["polfraction"])):
+                assert (
+                    0 <= mode["polfraction"] <= 1
+                ), "Polarization fraction must be in [0,1]"
+ 
+                # if we're doing a pol calculation, need to double detector noise rates
+                nvRatesCore.detDark *= 2
+                nvRatesCore.detCIC *= 2
+                nvRatesCore.detRead *= 2
+ 
+            # populate outputs
+            C_p[jj] = mode["f_SR"] * cphrate.planet * dQE
+            C_b[jj] = nvRatesCore.total
+            C_sp[jj] = residSpecSdevRate
+ 
+            if returnExtra:
+                extra["dQE"][jj] = dQE
+                extra["frameTime"][jj] = frameTime
+                extra["mpix"][jj] = mpix
+                extra["throughput_rates"][jj] = throughput_rates
+                extra["cphrate"][jj] = cphrate
+                extra["ENF"][jj] = ENF
+                extra["effReadnoise"][jj] = effReadnoise
+                extra["QE_img"][jj] = QE_img
+                extra["nvRatesCore"][jj] = nvRatesCore
+                extra["detNoiseRate"][jj] = detNoiseRate
+                extra["photonCounting"][jj] = photonCounting
+ 
+            # end loop through values
+        if returnExtra:
+            return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s, extra
+ 
+        return C_p << self.inv_s, C_b << self.inv_s, C_sp << self.inv_s
+
+
+    def compute_frame_time_and_dqe_eetc(
+        self, desiredRate, tfmin, tfmax, photonCounting, countRateTotal
+    ):
+        """EETC-sourced replacement for cgi_noise's
+        cginoiselib.compute_frame_time_and_dqe().
+ 
+        Computes the per-frame integration time and the EM-gain excess
+        noise factor (ENF) using the EXCAM detector parameters loaded from
+        EETC's excam_config.yaml (`self.eetc_excam_config`), instead of
+        cgi_noise's DET_QE_Data/DET_CBE_Data curves.
+ 
+        Args:
+            desiredRate (float):
+                Target total electron count per pixel per frame.
+            tfmin (float):
+                Caller-specified minimum frame time [s] (e.g. self.tfmin).
+            tfmax (float):
+                Caller-specified maximum frame time [s] (e.g. self.tfmax).
+            photonCounting (bool):
+                Whether this frame is being read out in photon-counting mode.
+            countRateTotal (float):
+                Total incident count rate on the pixel of interest
+                [e-/pix/s] (cphrate.total).
+ 
+        Returns:
+            tuple:
+                ENF (float):
+                    EM-gain excess noise factor, from eetc.excam_tools._ENF.
+                effReadnoise (float):
+                    Read noise [e-/pix], referred to the EM gain used here.
+                frameTime (float):
+                    Selected frame time [s].
+                dQE (float):
+                    Set to 1.0 -- EETC's flux calibration already includes
+                    QE and excam_config.yaml has no separate QE curve.
+                QE_img (float):
+                    Set to 1.0, for the same reason as dQE.
+                g (float):
+                    EM gain used to compute ENF/effReadnoise (1.0 for analog
+                    frames, gconst or gmax for photon-counting frames).
+        """
+        (
+            darke,
+            cic,
+            rn,
+            X,
+            a,
+            Lij,
+            alpha0,
+            fwc,
+            alpha1,
+            fwc_em,
+            Nmin,
+            Nmax,
+            tmin,
+            tmax,
+            gmax,
+            gconst,
+            n,
+            Nem,
+            tol,
+            delta_constr,
+            overhead,
+            pc_ecount_max,
+            T_factor,
+        ) = _unpack_excam_config(self.eetc_excam_config)
+ 
+        # combine EETC-config bounds with the caller-specified bounds
+        t_lo = max(tfmin, tmin)
+        t_hi = min(tfmax, tmax)
+ 
+        frameTime = float(np.clip(desiredRate / countRateTotal, t_lo, t_hi))
+ 
+        if photonCounting:
+            g = gconst if gconst is not None else gmax
+        else:
+            g = 1.0
+ 
+        ENF = _ENF(g, Nem)
+        effReadnoise = rn / g
+ 
+        dQE = 1.0
+        QE_img = 1.0
+ 
+        return ENF, effReadnoise, frameTime, dQE, QE_img, g
+ 
+    def detector_noise_rates_eetc(self, frameTime, mpix, g):
+        """EETC-sourced replacement for cgi_noise's
+        cginoiselib.detector_noise_rates().
+ 
+        Uses EXCAM dark current and CIC values from EETC's
+        excam_config.yaml (`self.eetc_excam_config`). Unlike cgi_noise's
+        detector_noise_rates(), no mission-elapsed-time ("monthsAtL2")
+        radiation-damage degradation is applied here, because
+        excam_config.yaml exposes single darke/cic values with no
+        analogous time dependence at this interface
+ 
+        Args:
+            frameTime (float):
+                Frame time [s].
+            mpix (float):
+                Number of pixels contributing to the photometric aperture.
+            g (float):
+                EM gain (used to refer read noise, matching
+                compute_frame_time_and_dqe_eetc's convention).
+ 
+        Returns:
+            SimpleNamespace:
+                Object exposing .detDark, .detCIC, .detRead, and .total
+                attributes (electron rate contributions, [e-/pix/s]), to
+                match the attribute interface cgi_noise.cginoiselib's
+                noiseRates() expects from a detNoiseRate object.
+        """
+        (
+            darke,
+            cic,
+            rn,
+            X,
+            a,
+            Lij,
+            alpha0,
+            fwc,
+            alpha1,
+            fwc_em,
+            Nmin,
+            Nmax,
+            tmin,
+            tmax,
+            gmax,
+            gconst,
+            n,
+            Nem,
+            tol,
+            delta_constr,
+            overhead,
+            pc_ecount_max,
+            T_factor,
+        ) = _unpack_excam_config(self.eetc_excam_config)
+ 
+        dark = darke * mpix
+        CIC = cic * mpix / frameTime
+        read = (rn / g) ** 2 * mpix / frameTime
+        return SimpleNamespace(dark=dark, CIC=CIC, read=read)
+        
+
+
     def calc_polfrac(self, p_in, _C_p, mode):
         """
         Compute measured polarization fraction p_f for a given intrinsic
@@ -861,6 +1729,117 @@ class corgietc(Nemati):
         # negative values are set to zero
         intTime[intTime < 0.0] = np.nan
 
+        return intTime << u.d
+    
+    def calc_intTime_eetc(
+        self,
+        TL,
+        sInds,
+        fZ,
+        JEZ,
+        dMag,
+        WA,
+        mode,
+        TK=None,
+        detectorModel="eetc",
+        fluxModel="eetc",
+    ):
+        """Finds integration times of target systems for a specific observing
+        mode (imaging or characterization), based on Nemati 2014 (SPIE),
+        sourcing star flux and/or the detector model from EETC instead of
+        cgi_noise.
+ 
+        This is a standalone counterpart to `calc_intTime` -- that function
+        is unmodified and always uses cgi_noise (via `Cp_Cb_Csp`) for
+        everything. This function calls `Cp_Cb_Csp_eetc` instead, which
+        defaults to EETC for both the flux and detector model (see
+        `detectorModel`/`fluxModel` below), but either can be set back to
+        `"cgi_noise"` for side-by-side comparisons.
+ 
+        Args:
+            TL (TargetList module):
+                TargetList class object
+            sInds (integer ndarray):
+                Integer indices of the stars of interest
+            fZ (astropy Quantity array):
+                Surface brightness of local zodiacal light in units of 1/arcsec2
+            JEZ (astropy Quantity array):
+                Intensity of exo-zodiacal light in units of ph/s/m2/arcsec2
+            dMag (float ndarray):
+                Differences in magnitude between planets and their host star
+            WA (astropy Quantity array):
+                Working angles of the planets of interest in units of arcsec
+            mode (dict):
+                Selected observing mode
+            TK (TimeKeeping object):
+                Optional TimeKeeping object (default None), used to model detector
+                degradation effects where applicable.
+            detectorModel (str):
+                Either "eetc" (default here) or "cgi_noise". Forwarded to
+                Cp_Cb_Csp_eetc()
+            fluxModel (str):
+                Either "eetc" (default here) or "cgi_noise". Forwarded to
+                Cp_Cb_Csp_eetc() 
+ 
+        Returns:
+            intTime (astropy Quantity array):
+                Integration times in units of day
+ 
+        """
+ 
+        # electron counts
+        C_p, C_b, C_sp = self.Cp_Cb_Csp_eetc(
+            TL,
+            sInds,
+            fZ,
+            JEZ,
+            dMag,
+            WA,
+            mode,
+            TK=TK,
+            detectorModel=detectorModel,
+            fluxModel=fluxModel,
+        )
+        _C_p = C_p.to_value(self.inv_s)
+        _C_b = C_b.to_value(self.inv_s)
+        _C_sp = C_sp.to_value(self.inv_s)
+ 
+        # get SNR threshold
+        SNR = mode["SNR"]
+        # calculate integration time based on Nemati 2014
+        # if doing a pol calculation, include polarization fraction
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if ("polfraction" in mode) and not np.isnan(mode["polfraction"]):
+                if ("theta" not in mode) or np.isnan(mode["theta"]):
+                    mode["theta"] = 0
+ 
+                p_in = mode["polfraction"]
+                p_f = self.calc_polfrac(p_in, _C_p, mode)
+                # theta_f = 0.5*(np.arctan(U_m/Q_m)*180/np.pi)
+ 
+                if ("Cp_ab" not in mode) or np.isnan(mode["Cp_ab"]):
+                    mode["Cp_ab"] = 0
+ 
+                intTime = (
+                    np.true_divide(
+                        SNR**2.0 * _C_b,
+                        (
+                            (_C_p * p_f) ** 2.0
+                            - (SNR**2 * (_C_sp**2 + mode["Cp_ab"] ** 2))
+                        ),
+                    )
+                    * self.s2d
+                )
+            else:
+                intTime = (
+                    np.true_divide(SNR**2.0 * _C_b, (_C_p**2.0 - (SNR * _C_sp) ** 2.0))
+                    * self.s2d
+                )
+        # infinite and NAN are set to zero
+        intTime[np.isinf(intTime) | np.isnan(intTime)] = np.nan
+        # negative values are set to zero
+        intTime[intTime < 0.0] = np.nan
+ 
         return intTime << u.d
 
     def calc_critical_polfraction(self, TL, sInds, fZ, JEZ, dMag, WA, mode, TK=None):
