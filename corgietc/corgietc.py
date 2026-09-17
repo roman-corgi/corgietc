@@ -337,7 +337,7 @@ class corgietc(Nemati):
                 )
                 dpix_dlam = ResPowatPSF * xpixPerCor / mode["lam"]
                 xpixPerSpec = dpix_dlam * mode["lam"] / mode["inst"]["Rs"]
-                mode["mpix"] = xpixPerSpec * ypixPerCor
+                mode["mpix"] = (xpixPerSpec * ypixPerCor).decompose().value
             else:
                 raise Exception("Instrument name must contain IMAGER or SPEC")
 
